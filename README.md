@@ -78,16 +78,14 @@ reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 
 ## 🤖 支持的模型
 
-下表是项目内置的默认模型池。模型名称已于 2026-08-15 根据当前代码、Google Gemini Models API 和智谱官方模型文档核对。
-
-| Provider      | 模型                        | 简要介绍                                                                 | 默认角色       |
-| ------------- | --------------------------- | ------------------------------------------------------------------------ | -------------- |
-| 智谱 GLM      | `glm-4.1v-thinking-flash` | 偏视觉思考与推理的 GLM 多模态模型，适合需要分析过程的图片理解任务。      | 默认模型       |
-| 智谱 GLM      | `glm-4.6v-flash`          | GLM Flash 视觉模型，用于快速图像理解，并作为智谱模型池的第二顺位。       | 智谱后备       |
-| Google Gemini | `gemini-3.7-flash`        | 固定版本的 Gemini Flash 多模态模型，支持`generateContent`。            | Gemini 首选    |
-| Google Gemini | `gemini-3.6-flash`        | 固定版本的 Gemini Flash 多模态模型，用于 3.7 不可用时继续处理请求。      | Gemini 后备 1  |
-| Google Gemini | `gemini-3.5-flash`        | 固定版本的 Gemini Flash 多模态模型，提供更深一层的版本回退。             | Gemini 后备 2  |
-| Google Gemini | `gemini-flash-latest`     | 指向当前最新 Gemini Flash 的浮动别名，实际版本可能随 Google 更新而变化。 | Gemini 后备 3 |
+| Provider | 模型                        | 简要介绍                                                                 | 默认角色       |
+| -------- | --------------------------- | ------------------------------------------------------------------------ | -------------- |
+| GLM      | `glm-4.1v-thinking-flash` | 偏视觉思考与推理的 GLM 多模态模型，适合需要分析过程的图片理解任务。      | 默认模型       |
+| GLM      | `glm-4.6v-flash`          | GLM Flash 视觉模型，用于快速图像理解，并作为智谱模型池的第二顺位。       | 智谱后备       |
+| Gemini   | `gemini-3.7-flash`        | 固定版本的 Gemini Flash 多模态模型，支持`generateContent`。            | Gemini 首选    |
+| Gemini   | `gemini-3.6-flash`        | 固定版本的 Gemini Flash 多模态模型，用于 3.7 不可用时继续处理请求。      | Gemini 后备 1  |
+| Gemini   | `gemini-3.5-flash`        | 固定版本的 Gemini Flash 多模态模型，提供更深一层的版本回退。             | Gemini 后备 2  |
+| Gemini   | `gemini-flash-latest`     | 指向当前最新 Gemini Flash 的浮动别名，实际版本可能随 Google 更新而变化。 | Gemini 后备 3 |
 
 ## 🔀 模型调用顺序
 
