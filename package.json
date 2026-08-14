@@ -1,0 +1,19 @@
+{
+  "name": "img2txt",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Node.js runtime for the img2txt skill.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "check": "node --check scripts/describe_image.js && node --check scripts/errors.js && node --check scripts/image_input_resolver.js && node --check scripts/image_preparer.js && node --check scripts/key_store.js && node --check scripts/providers/http.js && node --check scripts/providers/gemini.js && node --check scripts/providers/zhipu.js && node --check tests/helpers.js && node --check tests/input_resolver.test.js && node --check tests/image_preparer.test.js && node --check tests/providers.test.js && node --check tests/routing.test.js && node --check tests/cli.test.js",
+    "test": "node --test --test-concurrency=1 tests/input_resolver.test.js tests/image_preparer.test.js tests/providers.test.js tests/routing.test.js tests/cli.test.js"
+  },
+  "dependencies": {
+    "bmp-ts": "^1.0.9",
+    "https-proxy-agent": "^7.0.6",
+    "sharp": "^0.35.3"
+  }
+}

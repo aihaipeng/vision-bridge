@@ -1,0 +1,8 @@
+node_modules/
+.reasonix/
+.env
+.env.*
+*.log
+coverage/
+img2txt_retry_*
+vision_clip_*
