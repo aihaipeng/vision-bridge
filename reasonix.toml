@@ -1,2 +1,0 @@
-[permissions]
-allow = ["Bash=Get-ChildItem -Force -Recurse -Depth 2 | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize"]
