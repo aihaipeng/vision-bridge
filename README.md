@@ -28,7 +28,7 @@
 - 提供公开 URL：“分析 `https://example.com/chart.png` 中的数据趋势。”
 - 明确使用剪贴板：“读取剪贴板中的截图并解释报错。”
 
-仅发送图片而不附带说明时，Skill 会直接详细描述图片，不需要用户选择模型或手动执行脚本。
+仅发送图片而不附带说明时，Skill 会自动详细描述图片。
 
 ## 🔑 申请并设置 API Key
 
@@ -91,16 +91,7 @@ reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 
 ### 默认顺序
 
-`VISION_PROVIDER=auto` 或未设置时，完整调用顺序为：
-
-1. `glm-4.1v-thinking-flash`
-2. `glm-4.6v-flash`
-3. `gemini-3.7-flash`
-4. `gemini-3.6-flash`
-5. `gemini-3.5-flash`
-6. `gemini-flash-latest`
-
-如果只配置了一个 Provider 的 Key，脚本会跳过没有 Key 的 Provider，直接使用可用模型池。
+`VISION_PROVIDER=auto` 或未设置时，按上表顺序调用：先 GLM 模型池，全部失败后回退 Gemini 模型池。只配置一个 Provider 的 Key 时，自动跳过没有 Key 的 Provider。
 
 ### 用户指定模型或 Provider
 
@@ -218,17 +209,6 @@ npm test
 ```
 
 完整恢复步骤见 [`references/troubleshooting.md`](references/troubleshooting.md)，Provider 与图片限制见 [`references/provider_limits.md`](references/provider_limits.md)。
-
-## ✅ 开发与验证
-
-在 Skill 目录运行：
-
-```powershell
-npm run check
-npm test
-```
-
-测试覆盖输入解析、安全 URL 校验、格式标准化、尺寸与体积压缩、密钥处理、模型路由、重试、模型回退、跨 Provider 回退和 CLI 输出协议。
 
 ## 🔗 官方参考
 
