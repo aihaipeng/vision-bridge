@@ -6,8 +6,6 @@ const { prepareImage } = require('./image_preparer');
 const { CliError, ProviderError, formatCliError, singleLine } = require('./errors');
 const {
   PROVIDER_KEYS,
-  persistUserEnvironmentKey,
-  readStdinCredential,
   resolveCredential,
 } = require('./key_store');
 const gemini = require('./providers/gemini');
@@ -16,14 +14,14 @@ const zhipu = require('./providers/zhipu');
 const RETRY_CACHE_PREFIX = 'img2txt_retry_';
 const RETRY_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PROMPT = '请详细描述这张图片的内容';
-const VALID_PROVIDER_MODES = new Set(['auto', 'gemini', 'zhipu']);
+const PROVIDER_ORDER = ['zhipu', 'gemini'];
 const PROVIDER_REGISTRATION_URLS = {
   zhipu: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys',
   gemini: 'https://aistudio.google.com/apikey',
 };
 
 function retryHint(retryPath) {
-  return retryPath ? ` 图片已缓存至 ${retryPath}；取得新 key 后使用该路径重试，不要再次读取 clipboard。` : '';
+  return retryPath ? ` 图片已缓存至 ${retryPath}；完成本机 Key 配置并通过 doctor 验证后使用该路径重试，不要再次读取 clipboard。` : '';
 }
 
 function imageToBase64(image) {
@@ -90,14 +88,6 @@ function existingRetryCache(input) {
     && fs.existsSync(resolved) ? resolved : null;
 }
 
-function providerModeFromEnvironment() {
-  const mode = (process.env.VISION_PROVIDER || 'auto').trim().toLowerCase();
-  if (!VALID_PROVIDER_MODES.has(mode)) {
-    throw new CliError('CONFIG', `VISION_PROVIDER 仅支持 auto、gemini 或 zhipu，当前值为 ${mode}`);
-  }
-  return mode;
-}
-
 function parseGeminiModels(value) {
   const models = String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
   return models.length ? models : gemini.DEFAULT_MODELS;
@@ -110,70 +100,8 @@ function parseZhipuModels() {
   return legacyModel ? [legacyModel] : zhipu.DEFAULT_MODELS;
 }
 
-function prioritizeModel(models, preferredModel) {
-  if (!preferredModel) return [...models];
-  return [preferredModel, ...models.filter((model) => model.toLowerCase() !== preferredModel.toLowerCase())];
-}
-
-function isNegatedMention(text, index) {
-  const prefix = text.slice(Math.max(0, index - 32), index);
-  return /(?:不要(?:再)?(?:使用|用|选择|调用)?|别(?:使用|用|选|调用)?|禁止(?:使用|用|选择|调用)?|避免(?:使用|用|选择|调用)?|不(?:使用|用|选择|调用)|请?勿(?:使用|用|选择|调用)?|do\s+not\s+use|don't\s+use|avoid|instead\s+of)\s*$/i.test(prefix);
-}
-
-function firstMention(prompt, candidates) {
-  const lower = String(prompt || '').toLowerCase();
-  const mentions = [];
-  for (const candidate of candidates) {
-    let offset = 0;
-    while (offset < lower.length) {
-      const index = lower.indexOf(candidate.term, offset);
-      if (index < 0) break;
-      if (!isNegatedMention(lower, index)) mentions.push({ ...candidate, index });
-      offset = index + candidate.term.length;
-    }
-  }
-  return mentions
-    .sort((left, right) => left.index - right.index)[0] || null;
-}
-
-function detectRoutingIntent(prompt) {
-  const exact = firstMention(prompt, [
-    { term: 'glm-4.1v-thinking-flash', provider: 'zhipu', model: 'glm-4.1v-thinking-flash' },
-    { term: 'glm-4.6v-flash', provider: 'zhipu', model: 'glm-4.6v-flash' },
-  ]);
-  if (exact) return exact;
-
-  const lower = String(prompt || '').toLowerCase();
-  const geminiModel = [...lower.matchAll(/\bgemini-[a-z0-9._-]+\b/g)]
-    .find((match) => !isNegatedMention(lower, match.index));
-  if (geminiModel) return { provider: 'gemini', model: geminiModel[0] };
-
-  return firstMention(prompt, [
-    { term: 'gemini', provider: 'gemini' },
-    { term: 'google', provider: 'gemini' },
-    { term: '谷歌', provider: 'gemini' },
-    { term: 'glm', provider: 'zhipu' },
-    { term: '智谱', provider: 'zhipu' },
-  ]);
-}
-
-function providerOrder(mode) {
-  return mode === 'gemini' ? ['gemini', 'zhipu'] : ['zhipu', 'gemini'];
-}
-
-function resolveRouting(prompt, environmentMode, geminiModels, zhipuModels) {
-  const intent = detectRoutingIntent(prompt);
-  const mode = intent ? intent.provider : environmentMode;
-  return {
-    mode,
-    providerOrder: providerOrder(mode),
-    geminiModels: intent && intent.provider === 'gemini' && intent.model
-      ? prioritizeModel(geminiModels, intent.model)
-      : [...geminiModels],
-    zhipuModels: intent && intent.provider === 'zhipu' && intent.model
-      ? prioritizeModel(zhipuModels, intent.model)
-      : [...zhipuModels],
-  };
+function providerOrder() {
+  return [...PROVIDER_ORDER];
 }
 
 function summarizeFailures(failures) {
@@ -186,51 +114,147 @@ function summarizeFailures(failures) {
 function keyGuidance(providers) {
   return [...new Set(providers)].map((provider) => {
     const envName = PROVIDER_KEYS[provider];
-    return `${provider}: 注册 ${PROVIDER_REGISTRATION_URLS[provider]}；设置命令 setx ${envName} "<你的Key>"；或手动提供 ${envName}=<key>`;
+    return `${provider}: 配置本机用户环境变量 ${envName}，注册地址 ${PROVIDER_REGISTRATION_URLS[provider]}`;
   }).join(' | ');
 }
 
 function keyRequiredError(providers, context = '') {
   const prefix = context ? `${context}；` : '';
-  return new CliError('KEY_REQUIRED', `${prefix}未检测到可用 API key。${keyGuidance(providers)}`, 2);
+  return new CliError('KEY_REQUIRED', `${prefix}未检测到可用 API key。${keyGuidance(providers)}；配置后在 Skill 目录运行 npm run doctor 验证，无需重启 Agent。不要在聊天中发送 Key`, 2);
+}
+
+function modelsFor(provider, geminiModels, zhipuModels) {
+  return provider === 'gemini' ? geminiModels : zhipuModels;
+}
+
+function firstTarget(provider, geminiModels, zhipuModels) {
+  const models = modelsFor(provider, geminiModels, zhipuModels);
+  return models.length ? `${provider}/${models[0]}` : provider;
+}
+
+function formatStatusEvent(event) {
+  if (event.type === 'provider_available') {
+    return `[INFO] PROVIDER_AVAILABLE: ${event.provider} 已配置，模型 ${event.models.join(', ')}`;
+  }
+  if (event.type === 'provider_skipped') {
+    return `[INFO] PROVIDER_SKIPPED: ${event.provider} 缺少 ${event.envName}，不加入本次轮询`;
+  }
+  if (event.type === 'provider_switch') {
+    const target = event.model ? `${event.provider}/${event.model}` : event.provider;
+    return `[WARN] PROVIDER_SWITCH: ${target} 发生 Provider 级故障（${event.code || 'UNEXPECTED'}: ${singleLine(event.message)}），切换到 ${event.next}`;
+  }
+  if (event.type === 'provider_failed') {
+    const target = event.model ? `${event.provider}/${event.model}` : event.provider;
+    return `[WARN] PROVIDER_FAILED: ${target} 发生 Provider 级故障（${event.code || 'UNEXPECTED'}: ${singleLine(event.message)}），没有更多可用 Provider`;
+  }
+  const reason = `${event.code || 'UNKNOWN'}: ${singleLine(event.message)}`;
+  if (event.type === 'model_switch') {
+    return `[WARN] MODEL_SWITCH: ${event.provider}/${event.model} 失败（${reason}），切换到 ${event.next}`;
+  }
+  return `[WARN] MODEL_FAILED: ${event.provider}/${event.model} 失败（${reason}），没有更多可用模型`;
+}
+
+function formatSuccessfulOutput(result) {
+  const text = String(result.text || '')
+    .replace(/<\|(?:begin|end)_of_box\|>/g, '')
+    .trim();
+  return `${text}\n\n[识别模型: ${result.provider}/${result.model}]`;
+}
+
+function modelFailures(failures) {
+  return failures.flatMap(({ error }) => error instanceof ProviderError ? error.failures : []);
+}
+
+function recoveryGuidance(failures) {
+  const attempts = modelFailures(failures);
+  const actions = [];
+  if (failures.some(({ missing }) => missing) || attempts.some(({ auth }) => auth)) {
+    actions.push('检查对应 API Key 是否已在本机用户环境变量中正确配置');
+  }
+  if (attempts.some(({ code }) => code === 'NETWORK')) {
+    actions.push('检查出站网络、HTTPS_PROXY/HTTP_PROXY 和 VISION_API_TIMEOUT_MS');
+  }
+  if (attempts.some(({ status }) => status === 408 || status >= 500)) {
+    actions.push('Provider 服务暂不可用，稍后重试或检查官方服务状态');
+  }
+  if (attempts.some(({ status, code }) => status === 429 || /RATE_LIMIT/.test(code || ''))) {
+    actions.push('等待配额恢复，或配置另一 Provider 的有效 Key');
+  }
+  if (attempts.some(({ status }) => status === 400 || status === 404)) {
+    actions.push('检查模型配置及 Provider 当前模型可用性');
+  }
+  if (!actions.length) actions.push('根据各模型失败原因检查输入、Provider 状态和配置');
+  return `Agent 下一步：${[...new Set(actions)].join('；')}`;
 }
 
 async function describeWithProviders(options) {
   const {
     image,
     prompt,
-    mode = 'auto',
     credentials,
     geminiModels = gemini.DEFAULT_MODELS,
     zhipuModels = zhipu.DEFAULT_MODELS,
     adapters = { gemini, zhipu },
     fetchImpl,
-    sleepImpl,
+    onStatus,
   } = options;
   const failures = [];
-  for (const provider of providerOrder(mode)) {
+  const availableProviders = [];
+  for (const provider of providerOrder()) {
     const credential = credentials[provider];
     if (!credential || !credential.key) {
       failures.push({ provider, missing: true });
+      if (onStatus) onStatus({ type: 'provider_skipped', provider, envName: PROVIDER_KEYS[provider] });
       continue;
     }
+    availableProviders.push(provider);
+    if (onStatus) onStatus({
+      type: 'provider_available',
+      provider,
+      models: modelsFor(provider, geminiModels, zhipuModels),
+    });
+  }
+  if (!availableProviders.length) throw keyRequiredError(providerOrder());
+
+  for (let index = 0; index < availableProviders.length; index += 1) {
+    const provider = availableProviders[index];
+    const credential = credentials[provider];
+    const nextProvider = availableProviders[index + 1];
+    const fallbackTarget = nextProvider ? firstTarget(nextProvider, geminiModels, zhipuModels) : undefined;
     try {
       const result = provider === 'gemini'
-        ? await adapters.gemini.describe({ image, prompt, key: credential.key, models: geminiModels, fetchImpl, sleepImpl })
-        : await adapters.zhipu.describe({ image, prompt, key: credential.key, models: zhipuModels, fetchImpl, sleepImpl });
+        ? await adapters.gemini.describe({ image, prompt, key: credential.key, models: geminiModels, fetchImpl, onStatus, fallbackTarget })
+        : await adapters.zhipu.describe({ image, prompt, key: credential.key, models: zhipuModels, fetchImpl, onStatus, fallbackTarget });
       return { ...result, credential };
     } catch (error) {
       failures.push({ provider, error });
+      if (onStatus && (!(error instanceof ProviderError) || error.failures.length === 0)) {
+        onStatus({
+          type: fallbackTarget ? 'provider_switch' : 'provider_failed',
+          provider,
+          code: error.code || 'UNEXPECTED',
+          message: error.message || String(error),
+          next: fallbackTarget,
+        });
+      }
     }
   }
 
-  const credentialFailures = failures.filter(({ error, missing }) =>
-    missing || (error instanceof ProviderError && error.auth));
-  if (credentialFailures.length) {
-    const providers = credentialFailures.map(({ provider }) => provider);
+  const providerCredentialsFailed = failures.filter(({ error, missing }) => missing
+    || (error instanceof ProviderError && error.failures.length > 0 && error.failures.every(({ auth }) => auth)));
+  if (providerCredentialsFailed.length === providerOrder().length) {
+    const providers = providerCredentialsFailed.map(({ provider }) => provider);
     throw keyRequiredError(providers, `没有视觉模型成功完成请求：${summarizeFailures(failures)}`);
   }
-  throw new CliError('PROVIDERS_FAILED', `没有视觉模型成功完成请求：${summarizeFailures(failures)}`, 1);
+  const attempts = modelFailures(failures);
+  const code = attempts.length > 0 && attempts.every(({ code: failureCode }) => failureCode === 'NETWORK')
+    ? 'NETWORK_UNAVAILABLE'
+    : (attempts.length > 0 && attempts.every(({ status }) => status === 408 || status >= 500)
+      ? 'SERVICE_UNAVAILABLE'
+    : (attempts.length > 0 && attempts.every(({ status, code: failureCode }) => status === 429 || /RATE_LIMIT/.test(failureCode || ''))
+      ? 'RATE_LIMITED'
+      : 'PROVIDERS_FAILED'));
+  throw new CliError(code, `没有视觉模型成功完成请求：${summarizeFailures(failures)}；${recoveryGuidance(failures)}`, 1);
 }
 
 async function main() {
@@ -240,18 +264,11 @@ async function main() {
   cleanupRetryCaches();
   const imageInput = process.argv[2];
   const prompt = process.argv[3] || DEFAULT_PROMPT;
-  const environmentMode = providerModeFromEnvironment();
-
-  const routing = resolveRouting(
-    prompt,
-    environmentMode,
-    parseGeminiModels(process.env.GEMINI_MODELS),
-    parseZhipuModels(),
-  );
-  const stdinCredential = readStdinCredential(routing.mode);
+  const geminiModels = parseGeminiModels(process.env.GEMINI_MODELS);
+  const zhipuModels = parseZhipuModels();
   const credentials = {
-    gemini: resolveCredential('gemini', stdinCredential),
-    zhipu: resolveCredential('zhipu', stdinCredential),
+    gemini: resolveCredential('gemini'),
+    zhipu: resolveCredential('zhipu'),
   };
 
   let retryPath = existingRetryCache(imageInput);
@@ -265,7 +282,7 @@ async function main() {
         throw error;
       }
     }
-    const error = keyRequiredError(routing.providerOrder);
+    const error = keyRequiredError(providerOrder());
     throw new CliError(error.code, `${error.message}${retryHint(retryPath)}`, error.exitCode, error);
   }
 
@@ -286,10 +303,10 @@ async function main() {
     result = await describeWithProviders({
       image: standardized,
       prompt,
-      mode: routing.mode,
       credentials,
-      geminiModels: routing.geminiModels,
-      zhipuModels: routing.zhipuModels,
+      geminiModels,
+      zhipuModels,
+      onStatus: (event) => process.stderr.write(`${formatStatusEvent(event)}\n`),
     });
   } catch (error) {
     const hint = retryHint(retryPath);
@@ -297,14 +314,7 @@ async function main() {
     throw new CliError('PROVIDERS_FAILED', `${error.message || error}${hint}`, 1, error);
   }
 
-  process.stdout.write(`${result.text}\n`);
-  if (result.credential.source === 'stdin') {
-    const persisted = persistUserEnvironmentKey(result.provider, result.credential.key);
-    const envName = PROVIDER_KEYS[result.provider];
-    process.stderr.write(persisted
-      ? `[INFO] 已持久化 ${envName} 到当前用户环境变量\n`
-      : `[WARN] 无法持久化 ${envName}，本次调用已成功但后续会话可能需要重新提供\n`);
-  }
+  process.stdout.write(`${formatSuccessfulOutput(result)}\n`);
   if (retryPath && fs.existsSync(retryPath)) fs.rmSync(retryPath, { force: true });
   return result;
 }
@@ -328,7 +338,8 @@ module.exports = {
   cleanupRetryCaches,
   createRetryCache,
   describeWithProviders,
-  detectRoutingIntent,
+  formatStatusEvent,
+  formatSuccessfulOutput,
   handleFatalError,
   imageToBase64,
   main,
@@ -336,8 +347,6 @@ module.exports = {
   parseZhipuModels,
   keyGuidance,
   keyRequiredError,
-  prioritizeModel,
   prepareForZhipu,
   providerOrder,
-  resolveRouting,
 };

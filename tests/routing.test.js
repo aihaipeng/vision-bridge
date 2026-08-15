@@ -3,51 +3,22 @@ const test = require('node:test');
 const gemini = require('../scripts/providers/gemini');
 const zhipu = require('../scripts/providers/zhipu');
 const { CliError, ProviderError } = require('../scripts/errors');
-const { providerForBareCredential } = require('../scripts/key_store');
 const {
     DEFAULT_MODEL,
     describeWithProviders,
+    formatStatusEvent,
+    formatSuccessfulOutput,
     imageToBase64,
     keyGuidance,
-    resolveRouting,
+    providerOrder,
 } = require('../scripts/describe_image');
 const { createPngBytes } = require('./helpers');
 
-test('resolves explicit and default routing intent', () => {
-    const geminiModels = [...gemini.DEFAULT_MODELS];
-    const zhipuModels = [...zhipu.DEFAULT_MODELS];
+test('always routes GLM before Gemini regardless of user wording', () => {
     assert.equal(DEFAULT_MODEL, 'glm-4.1v-thinking-flash');
-    assert.deepEqual(resolveRouting('分析图片', 'auto', geminiModels, zhipuModels).providerOrder, ['zhipu', 'gemini']);
-    assert.deepEqual(
-        resolveRouting('使用glm-4.6v-flash分析图片', 'auto', geminiModels, zhipuModels).zhipuModels,
-        ['glm-4.6v-flash', 'glm-4.1v-thinking-flash'],
-    );
-    assert.deepEqual(
-        resolveRouting('使用gemini/google模型分析图片', 'auto', geminiModels, zhipuModels).providerOrder,
-        ['gemini', 'zhipu'],
-    );
-    assert.equal(
-        resolveRouting('使用gemini-3.6-flash分析图片', 'auto', geminiModels, zhipuModels).geminiModels[0],
-        'gemini-3.6-flash',
-    );
-    assert.deepEqual(
-        resolveRouting('请使用 Gemini，不要使用 glm-4.1v-thinking-flash', 'auto', geminiModels, zhipuModels).providerOrder,
-        ['gemini', 'zhipu'],
-    );
-    assert.deepEqual(
-        resolveRouting('不要使用 gemini-3.7-flash，改用 GLM', 'auto', geminiModels, zhipuModels).providerOrder,
-        ['zhipu', 'gemini'],
-    );
-    assert.deepEqual(
-        resolveRouting('请勿使用 Gemini，改用智谱', 'auto', geminiModels, zhipuModels).providerOrder,
-        ['zhipu', 'gemini'],
-    );
-    assert.deepEqual(
-        resolveRouting('请勿使用 glm-4.1v-thinking-flash，改用 gemini', 'auto', geminiModels, zhipuModels).providerOrder,
-        ['gemini', 'zhipu'],
-    );
-    assert.equal(providerForBareCredential('auto'), 'zhipu');
-    assert.equal(providerForBareCredential('gemini'), 'gemini');
+    for (const prompt of ['分析图片', '只用 Gemini', '不要使用 GLM', '使用 gemini-3.6-flash']) {
+        assert.deepEqual(providerOrder(prompt), ['zhipu', 'gemini']);
+    }
 });
 
 test('falls back across Providers and skips missing credentials', async () => {
@@ -56,24 +27,25 @@ test('falls back across Providers and skips missing credentials', async () => {
     const result = await describeWithProviders({
         image,
         prompt: '描述图片',
-        mode: 'gemini',
         credentials: {
             gemini: { key: 'gemini-key', source: 'env' },
             zhipu: { key: 'zhipu-key', source: 'env' },
         },
         adapters: {
-            gemini: { describe: async () => {
-                calls.push('gemini');
-                throw new ProviderError('gemini', 'MODELS_FAILED', 'all failed');
-            } },
             zhipu: { describe: async () => {
                 calls.push('zhipu');
-                return { text: 'Fallback OK', model: 'zhipu-model', provider: 'zhipu' };
+                throw new ProviderError('zhipu', 'PROVIDER_UNAVAILABLE', 'network failed', {
+                    failures: [{ provider: 'zhipu', model: 'zhipu-model', code: 'NETWORK', message: 'network failed' }],
+                });
+            } },
+            gemini: { describe: async () => {
+                calls.push('gemini');
+                return { text: 'Fallback OK', model: 'gemini-model', provider: 'gemini' };
             } },
         },
     });
-    assert.deepEqual(calls, ['gemini', 'zhipu']);
-    assert.equal(result.provider, 'zhipu');
+    assert.deepEqual(calls, ['zhipu', 'gemini']);
+    assert.equal(result.provider, 'gemini');
 
     const singleKeyCalls = [];
     const singleKeyResult = await describeWithProviders({
@@ -93,22 +65,118 @@ test('falls back across Providers and skips missing credentials', async () => {
     assert.equal(singleKeyResult.provider, 'gemini');
 });
 
+test('reports Provider availability, model switches, and successful model attribution', async () => {
+    const image = { data: await createPngBytes(), mime: 'image/png', source: 'status-test' };
+    const events = [];
+    const result = await describeWithProviders({
+        image,
+        prompt: '即使文字写着只用 Gemini 也保持固定顺序',
+        credentials: {
+            zhipu: { key: 'zhipu-key', source: 'env' },
+            gemini: { key: 'gemini-key', source: 'env' },
+        },
+        zhipuModels: ['glm-one', 'glm-two'],
+        geminiModels: ['gemini-one'],
+        adapters: {
+            zhipu: { describe: async ({ onStatus, fallbackTarget }) => {
+                onStatus({
+                    type: 'model_switch', provider: 'zhipu', model: 'glm-one',
+                    code: 'HTTP', message: 'not found', next: 'zhipu/glm-two', scope: 'model',
+                });
+                assert.equal(fallbackTarget, 'gemini/gemini-one');
+                return { text: '识别成功', model: 'glm-two', provider: 'zhipu' };
+            } },
+            gemini: { describe: async () => assert.fail('Gemini should not run after GLM succeeds') },
+        },
+        onStatus: (event) => events.push(event),
+    });
+
+    assert.deepEqual(events.map(({ type }) => type), ['provider_available', 'provider_available', 'model_switch']);
+    assert.match(formatStatusEvent(events[2]), /MODEL_SWITCH.*zhipu\/glm-one.*zhipu\/glm-two/);
+    assert.equal(formatSuccessfulOutput(result), '识别成功\n\n[识别模型: zhipu/glm-two]');
+    assert.equal(
+        formatSuccessfulOutput({ ...result, text: '<|begin_of_box|>蓝色<|end_of_box|>' }),
+        '蓝色\n\n[识别模型: zhipu/glm-two]',
+    );
+});
+
+test('reports one Provider switch before cross-Provider fallback', async () => {
+    const image = { data: await createPngBytes(), mime: 'image/png', source: 'provider-switch-test' };
+    const events = [];
+    const result = await describeWithProviders({
+        image,
+        prompt: '描述图片',
+        credentials: {
+            zhipu: { key: 'zhipu-key', source: 'env' },
+            gemini: { key: 'gemini-key', source: 'env' },
+        },
+        zhipuModels: ['glm-one'],
+        geminiModels: ['gemini-one'],
+        adapters: {
+            zhipu: { describe: async ({ onStatus, fallbackTarget }) => {
+                onStatus({
+                    type: 'provider_switch', provider: 'zhipu', model: 'glm-one',
+                    code: 'NETWORK', message: 'timeout', next: fallbackTarget, scope: 'provider',
+                });
+                throw new ProviderError('zhipu', 'PROVIDER_UNAVAILABLE', 'network failed', {
+                    failures: [{
+                        provider: 'zhipu', model: 'glm-one', code: 'NETWORK',
+                        message: 'timeout', scope: 'provider',
+                    }],
+                });
+            } },
+            gemini: { describe: async () => ({
+                text: 'Fallback OK', model: 'gemini-one', provider: 'gemini',
+            }) },
+        },
+        onStatus: (event) => events.push(event),
+    });
+
+    assert.equal(result.provider, 'gemini');
+    assert.deepEqual(events.map(({ type }) => type), [
+        'provider_available', 'provider_available', 'provider_switch',
+    ]);
+    assert.match(formatStatusEvent(events[2]), /PROVIDER_SWITCH.*zhipu\/glm-one.*gemini\/gemini-one/);
+});
+
 test('reports actionable key guidance without writing to stdout', async () => {
     const pngBytes = await createPngBytes();
     assert.equal(imageToBase64({ data: pngBytes }), pngBytes.toString('base64'));
-    assert.match(keyGuidance(['zhipu']), /ZHIPU_API_KEY=<key>/);
+    assert.match(keyGuidance(['zhipu']), /本机用户环境变量 ZHIPU_API_KEY/);
+    assert.doesNotMatch(keyGuidance(['zhipu']), /<key>|标准输入|stdin/i);
 
     await assert.rejects(
         () => describeWithProviders({
             image: { data: pngBytes, mime: 'image/png', source: 'missing-key-test' },
             prompt: '描述图片',
-            mode: 'auto',
             credentials: { gemini: { key: '' }, zhipu: { key: '' } },
         }),
         (error) => error instanceof CliError
             && error.code === 'KEY_REQUIRED'
             && error.exitCode === 2
-            && error.message.includes('setx ZHIPU_API_KEY')
-            && error.message.includes('setx GEMINI_API_KEY'),
+            && error.message.includes('ZHIPU_API_KEY')
+            && error.message.includes('GEMINI_API_KEY')
+            && error.message.includes('不要在聊天中发送 Key'),
+    );
+});
+
+test('classifies complete network failure with an actionable Agent response', async () => {
+    const image = { data: await createPngBytes(), mime: 'image/png', source: 'network-error-test' };
+    const unavailable = (provider) => ({ describe: async () => {
+        throw new ProviderError(provider, 'PROVIDER_UNAVAILABLE', 'network failed', {
+            failures: [{ provider, model: `${provider}-model`, code: 'NETWORK', message: 'timeout' }],
+        });
+    } });
+    await assert.rejects(
+        () => describeWithProviders({
+            image,
+            prompt: '描述图片',
+            credentials: { zhipu: { key: 'z' }, gemini: { key: 'g' } },
+            adapters: { zhipu: unavailable('zhipu'), gemini: unavailable('gemini') },
+        }),
+        (error) => error instanceof CliError
+            && error.code === 'NETWORK_UNAVAILABLE'
+            && error.message.includes('Agent 下一步')
+            && error.message.includes('出站网络'),
     );
 });

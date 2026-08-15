@@ -21,7 +21,6 @@ test('Gemini sends inline Base64 and falls back between models', async () => {
         prompt: '描述图片',
         key: 'test-key',
         models: ['model-one', 'model-two'],
-        sleepImpl: async () => {},
         fetchImpl: async (url, options) => {
             calls.push({ url, options });
             if (url.includes('model-one')) return fakeResponse(404, { error: { message: 'not found' } });
@@ -38,7 +37,7 @@ test('Gemini sends inline Base64 and falls back between models', async () => {
     assert.equal(payload.contents[0].parts[0].inline_data.data, pngBytes.toString('base64'));
 });
 
-test('Gemini distinguishes authentication and retryable failures', async () => {
+test('Gemini circuit-breaks Provider-scoped failures without retrying', async () => {
     const image = { data: await createPngBytes(), mime: 'image/png', source: 'failure-test' };
     let authCalls = 0;
     await assert.rejects(
@@ -47,13 +46,14 @@ test('Gemini distinguishes authentication and retryable failures', async () => {
             prompt: '描述图片',
             key: 'bad-key',
             models: ['one', 'two'],
-            sleepImpl: async () => {},
             fetchImpl: async () => {
                 authCalls += 1;
                 return fakeResponse(400, { error: { status: 'API_KEY_INVALID' } });
             },
         }),
-        (error) => error instanceof ProviderError && error.auth,
+        (error) => error instanceof ProviderError
+            && error.code === 'PROVIDER_UNAVAILABLE'
+            && error.failures[0].auth,
     );
     assert.equal(authCalls, 1);
 
@@ -64,15 +64,16 @@ test('Gemini distinguishes authentication and retryable failures', async () => {
             prompt: '描述图片',
             key: 'test-key',
             models: ['one', 'two'],
-            sleepImpl: async () => {},
             fetchImpl: async () => {
                 retryCalls += 1;
                 return fakeResponse(503, { error: { message: 'unavailable' } });
             },
         }),
-        (error) => error instanceof ProviderError && error.retryable,
+        (error) => error instanceof ProviderError
+            && error.code === 'PROVIDER_UNAVAILABLE'
+            && error.failures[0].code === 'HTTP',
     );
-    assert.equal(retryCalls, 3);
+    assert.equal(retryCalls, 1);
 });
 
 test('Gemini immediately falls back after a model-scoped quota limit', async () => {
@@ -84,7 +85,7 @@ test('Gemini immediately falls back after a model-scoped quota limit', async () 
         prompt: '描述图片',
         key: 'test-key',
         models: ['gemini-3.7-flash', 'gemini-3.6-flash'],
-        sleepImpl: async (delay) => delays.push(delay),
+        onStatus: (event) => delays.push(event),
         fetchImpl: async (url) => {
             calls.push(url);
             if (url.includes('gemini-3.7-flash')) {
@@ -119,12 +120,14 @@ test('Gemini immediately falls back after a model-scoped quota limit', async () 
     assert.equal(result.text, 'Fallback OK');
     assert.equal(result.model, 'gemini-3.6-flash');
     assert.deepEqual(calls.map((url) => url.includes('gemini-3.7-flash') ? '3.7' : '3.6'), ['3.7', '3.6']);
-    assert.deepEqual(delays, []);
+    assert.equal(delays.length, 1);
+    assert.equal(delays[0].type, 'model_switch');
+    assert.equal(delays[0].next, 'gemini/gemini-3.6-flash');
 });
 
-test('Gemini keeps Provider-scoped rate limits on the retry path', async () => {
+test('Gemini circuit-breaks Provider-scoped rate limits without waiting', async () => {
     const image = { data: await createPngBytes(), mime: 'image/png', source: 'provider-quota-test' };
-    const delays = [];
+    const events = [];
     let calls = 0;
     await assert.rejects(
         () => gemini.describe({
@@ -132,7 +135,7 @@ test('Gemini keeps Provider-scoped rate limits on the retry path', async () => {
             prompt: '描述图片',
             key: 'test-key',
             models: ['model-one', 'model-two'],
-            sleepImpl: async (delay) => delays.push(delay),
+            onStatus: (event) => events.push(event),
             fetchImpl: async () => {
                 calls += 1;
                 return fakeResponse(429, {
@@ -145,17 +148,18 @@ test('Gemini keeps Provider-scoped rate limits on the retry path', async () => {
             },
         }),
         (error) => error instanceof ProviderError
-            && error.retryable
-            && error.quotaScope === 'provider',
+            && error.code === 'PROVIDER_UNAVAILABLE'
+            && error.failures[0].status === 429,
     );
 
-    assert.equal(calls, 3);
-    assert.deepEqual(delays, [2000, 4000]);
+    assert.equal(calls, 1);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, 'provider_failed');
 });
 
 test('Gemini immediately exits the Provider when RetryInfo requires a long wait', async () => {
     const image = { data: await createPngBytes(), mime: 'image/png', source: 'provider-retry-info-test' };
-    const delays = [];
+    const events = [];
     let calls = 0;
     await assert.rejects(
         () => gemini.describe({
@@ -163,7 +167,7 @@ test('Gemini immediately exits the Provider when RetryInfo requires a long wait'
             prompt: '描述图片',
             key: 'test-key',
             models: ['model-one', 'model-two'],
-            sleepImpl: async (delay) => delays.push(delay),
+            onStatus: (event) => events.push(event),
             fetchImpl: async () => {
                 calls += 1;
                 return fakeResponse(429, {
@@ -190,13 +194,36 @@ test('Gemini immediately exits the Provider when RetryInfo requires a long wait'
             },
         }),
         (error) => error instanceof ProviderError
-            && error.code === 'PROVIDER_RATE_LIMIT'
-            && error.quotaScope === 'provider'
-            && error.retryAfterMs === 51000,
+            && error.code === 'PROVIDER_UNAVAILABLE'
+            && error.failures[0].quotaScope === 'provider',
     );
 
     assert.equal(calls, 1);
-    assert.deepEqual(delays, []);
+    assert.equal(events.length, 1);
+});
+
+test('Gemini treats model-specific 503 high demand as a model switch', async () => {
+    const image = { data: await createPngBytes(), mime: 'image/png', source: 'model-demand-test' };
+    const calls = [];
+    const events = [];
+    const result = await gemini.describe({
+        image,
+        prompt: '描述图片',
+        key: 'test-key',
+        models: ['busy-model', 'ready-model'],
+        onStatus: (event) => events.push(event),
+        fetchImpl: async (url) => {
+            calls.push(url);
+            if (url.includes('busy-model')) {
+                return fakeResponse(503, { error: { message: 'This model is currently experiencing high demand.' } });
+            }
+            return fakeResponse(200, { candidates: [{ content: { parts: [{ text: 'Ready' }] } }] });
+        },
+    });
+    assert.equal(result.model, 'ready-model');
+    assert.equal(calls.length, 2);
+    assert.equal(events[0].type, 'model_switch');
+    assert.equal(events[0].code, 'MODEL_UNAVAILABLE');
 });
 
 test('Zhipu sends bare Base64, falls back, and stops on HTTP 400', async () => {
@@ -220,20 +247,51 @@ test('Zhipu sends bare Base64, falls back, and stops on HTTP 400', async () => {
     assert.equal(payloads[1].messages[0].content[0].image_url.url, pngBytes.toString('base64'));
 
     let badRequestCalls = 0;
+    const events = [];
     await assert.rejects(
         () => zhipu.describe({
             image: { data: pngBytes, mime: 'image/png', source: 'zhipu-400-test' },
             prompt: '描述图片',
             key: 'test-key',
             models: [...zhipu.DEFAULT_MODELS],
+            fallbackTarget: 'gemini/gemini-one',
+            onStatus: (event) => events.push(event),
             fetchImpl: async () => {
                 badRequestCalls += 1;
                 return fakeResponse(400, { error: { message: 'bad request' } });
             },
         }),
-        (error) => error instanceof ProviderError && error.status === 400,
+        (error) => error instanceof ProviderError
+            && error.code === 'PROVIDER_UNAVAILABLE'
+            && error.failures[0].status === 400,
     );
     assert.equal(badRequestCalls, 1);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, 'provider_switch');
+    assert.equal(events[0].next, 'gemini/gemini-one');
+});
+
+test('Zhipu treats a model-not-found 400 as a model switch', async () => {
+    const image = { data: await createPngBytes(), mime: 'image/png', source: 'zhipu-model-missing-test' };
+    const calls = [];
+    const events = [];
+    const result = await zhipu.describe({
+        image,
+        prompt: '描述图片',
+        key: 'test-key',
+        models: ['missing-model', 'ready-model'],
+        onStatus: (event) => events.push(event),
+        fetchImpl: async (_url, options) => {
+            const model = JSON.parse(options.body).model;
+            calls.push(model);
+            if (model === 'missing-model') return fakeResponse(400, { error: { code: '1214', message: 'modelCode：不存在' } });
+            return fakeResponse(200, { choices: [{ message: { content: 'Ready' } }] });
+        },
+    });
+    assert.equal(result.model, 'ready-model');
+    assert.deepEqual(calls, ['missing-model', 'ready-model']);
+    assert.equal(events[0].type, 'model_switch');
+    assert.equal(events[0].code, 'MODEL_NOT_FOUND');
 });
 
 test('local image flows through the gateway, compression, and Zhipu payload', async (t) => {

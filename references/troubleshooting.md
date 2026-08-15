@@ -22,13 +22,13 @@ cd 'C:/path/to/img2txt'
 
 ## 依赖检查
 
-从 Skill 目录运行：
+本会话首次使用或发生运行错误后，从 Skill 目录运行：
 
 ```cmd
-node -e "require('sharp'); require('bmp-ts')"
+npm run doctor
 ```
 
-只有该命令失败时才安装锁定依赖：
+Doctor 会检查 Node.js 版本、`sharp`、`bmp-ts`、`https-proxy-agent` 和两个 Provider 的 Key 配置，只报告 Key 是否存在，不输出 Key 内容。只有返回 `DEPENDENCY` 时才安装锁定依赖：
 
 ```cmd
 npm ci --omit=dev
@@ -48,7 +48,7 @@ npm ci --omit=dev
 - 智谱：[https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
 - Gemini：[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 
-设置 Windows 当前用户环境变量：
+不要要求用户在聊天中发送 Key，也不要通过标准输入或命令参数把用户发来的 Key 传给脚本。请用户在自己的终端设置 Windows 当前用户环境变量：
 
 ```cmd
 setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
@@ -56,31 +56,7 @@ setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
 ```
 
 `setx` 不会修改已经运行的进程。脚本会直接读取用户级持久化值，因此可以在当前会话重新调用。
-
-用户直接提供新 key 时，通过标准输入传递，禁止放进命令参数。
-
-CMD：
-
-```cmd
-(echo GEMINI_API_KEY=YOUR_GEMINI_API_KEY)| node scripts/describe_image.js "C:\path\to\image.png" "描述图片内容"
-(echo ZHIPU_API_KEY=YOUR_ZHIPU_API_KEY)| node scripts/describe_image.js "C:\path\to\image.png" "描述图片内容"
-```
-
-PowerShell：
-
-```powershell
-'GEMINI_API_KEY=YOUR_GEMINI_API_KEY' | node scripts/describe_image.js "C:\path\to\image.png" "描述图片内容"
-'ZHIPU_API_KEY=YOUR_ZHIPU_API_KEY' | node scripts/describe_image.js "C:\path\to\image.png" "描述图片内容"
-```
-
-Bash/Git Bash/MSYS：
-
-```bash
-printf '%s\n' 'GEMINI_API_KEY=YOUR_GEMINI_API_KEY' | node scripts/describe_image.js 'C:/path/to/image.png' '描述图片内容'
-printf '%s\n' 'ZHIPU_API_KEY=YOUR_ZHIPU_API_KEY' | node scripts/describe_image.js 'C:/path/to/image.png' '描述图片内容'
-```
-
-只有视觉请求实际成功后，脚本才把标准输入中的 key 持久化到当前用户环境变量。
+设置或更新后直接运行 `npm run doctor`；脚本会读取 Windows 用户环境变量，无需重启 Agent。看到至少一个 `API_KEY: 已配置` 后重新执行识图。脚本不支持单次 Key，也不会自动持久化 Key。
 
 ## 剪贴板与重试缓存
 
@@ -100,7 +76,20 @@ printf '%s\n' 'ZHIPU_API_KEY=YOUR_ZHIPU_API_KEY' | node scripts/describe_image.j
 2. 请用户提供图片的绝对路径，或重新上传为会话能够提供真实路径的附件。
 3. 取得路径后使用原问题重新调用脚本，不要再读取剪贴板。
 
-缺少 key 或 Provider 失败时，脚本可能返回 `img2txt_retry_*` 临时路径。取得 key 后使用该路径重试，不要再次读取剪贴板。成功后缓存立即删除；超过缓存有效期的文件会在后续调用启动时清理。
+缺少 Key 或 Provider 失败时，脚本可能返回 `img2txt_retry_*` 临时路径。用户完成本机配置并通过 doctor 验证后，使用该路径重试，不要再次读取剪贴板。成功后缓存立即删除；超过缓存有效期的文件会在后续调用启动时清理。
+
+## 轮询状态
+
+stderr 中以下状态用于主 Agent 判断进度，不是图片内容：
+
+- `PROVIDER_AVAILABLE`：Key 已配置，Provider 已加入本次固定队列。
+- `PROVIDER_SKIPPED`：Key 未配置，本次不调用该 Provider。
+- `PROVIDER_SWITCH`：当前 Provider 发生 Provider 级故障，消息包含原因和下一 Provider。
+- `PROVIDER_FAILED`：当前 Provider 发生 Provider 级故障且没有更多可用 Provider。
+- `MODEL_SWITCH`：当前模型失败，消息包含错误代码、原因和下一模型或 Provider。
+- `MODEL_FAILED`：当前模型失败且没有更多可用目标。
+
+不要在看到 `MODEL_SWITCH` 时提前回复失败；等待进程最终退出。成功时 stdout 末尾的 `[识别模型: provider/model]` 必须保留到最终用户回答。
 
 ## 错误处理
 
@@ -108,7 +97,7 @@ printf '%s\n' 'ZHIPU_API_KEY=YOUR_ZHIPU_API_KEY' | node scripts/describe_image.j
 | ------ | ---------------------------------------------------------- |
 | `0`  | 使用 stdout 继续回答用户                                   |
 | `1`  | 根据 stderr 的错误代码修正输入、依赖、网络或 Provider 问题 |
-| `2`  | 展示注册地址和设置命令，请用户提供或配置有效 key           |
+| `2`  | 展示注册地址和设置命令，指导用户在本机配置有效 Key         |
 
 stderr 固定格式：
 
@@ -119,9 +108,12 @@ stderr 固定格式：
 常见错误：
 
 - `IMAGE_INPUT`：确认路径真实存在；不要猜测文件名；远程 URL 必须是公网地址。Bash 中把 Windows 路径写成 `C:/...`。Bing 的 `/th/id/` 缩略图链接会自动切换到稳定的 `global.bing.com` 图片域名。
-- `CONFIG`：检查 `VISION_PROVIDER` 和超时配置。
-- `KEY_REQUIRED`：配置至少一个 Provider 的有效 key 后重试。
-- `PROVIDERS_FAILED`：检查网络、代理、模型可用性和图片限制；必要时读取 `references/provider_limits.md`。
+- `CONFIG`：检查模型列表和超时配置。
+- `KEY_REQUIRED`：指导用户在本机配置或更新至少一个 Provider 的 Key 并运行 doctor；不要索取 Key。
+- `NETWORK_UNAVAILABLE`：检查出站网络、代理和 `VISION_API_TIMEOUT_MS` 后重试。
+- `SERVICE_UNAVAILABLE`：Provider 服务暂不可用；稍后重试或检查官方服务状态。
+- `RATE_LIMITED`：等待配额恢复，或配置另一 Provider 的有效 Key。
+- `PROVIDERS_FAILED`：按错误中的每个模型原因检查模型可用性、输入和 Provider 状态；必要时读取 `references/provider_limits.md`。
 - `UNEXPECTED`：先运行 `npm run check` 和 `npm test`，不要向用户输出 Node 堆栈。
 
 ## 代理

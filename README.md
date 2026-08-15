@@ -1,6 +1,6 @@
 # 🖼️ img2txt
 
-`img2txt` 是一个面向智能体的图像理解 Skill。它统一读取本地文件、公开 URL、Data URL、Base64、聊天附件真实路径和 Windows 剪贴板中的图片，经过解码、安全校验与格式标准化后，调用免费的视觉模型输出文字。
+`img2txt` 是一个面向智能体的图像理解 Skill。它统一读取本地文件、公开 URL、Data URL、Base64、一个或多个聊天附件真实路径和 Windows 剪贴板中的图片，经过解码、安全校验与格式标准化后，按固定模型池输出带模型归属的文字。
 
 适合以下任务：
 
@@ -8,6 +8,7 @@
 - 提取图片中的可见文字（OCR）
 - 解释图表、流程图和错误截图
 - 在当前 Agent 无法直接读取图片时提供视觉模型后备能力
+- 按附件顺序逐张识别并综合比较多张图片
 
 ## ⚙️ 运行要求
 
@@ -19,7 +20,7 @@
 
 ## 🚀 快速开始
 
-至少配置一个 Provider 的 API Key；同时配置两个 Key 可以获得完整的跨 Provider 自动回退能力。
+至少配置一个 Provider 的 API Key；同时配置两个 Key 可以获得完整的跨 Provider 自动轮询能力。脚本先检查 Key，只轮询已配置的 Provider，顺序始终为 GLM 模型池 → Gemini 模型池。用户在问题中声明 Provider 或模型不会改变该顺序。
 
 配置完成后，直接在对话中上传图片或提供图片来源，并说明任务。例如：
 
@@ -29,6 +30,8 @@
 - 明确使用剪贴板：“读取剪贴板中的截图并解释报错。”
 
 仅发送图片而不附带说明时，Skill 会自动详细描述图片。
+
+配置后在 Skill 目录运行 `npm run doctor`。它只显示 Key 是否已配置，不显示 Key 内容。不要在聊天中发送 API Key；脚本不读取标准输入，也不支持单次 Key。
 
 ## 🔑 申请并设置 API Key
 
@@ -43,9 +46,11 @@ Gemini：https://aistudio.google.com/apikey
 [Environment]::SetEnvironmentVariable('ZHIPU_API_KEY', 'YOUR_ZHIPU_API_KEY', 'User')
 [Environment]::SetEnvironmentVariable('GEMINI_API_KEY', 'YOUR_GEMINI_API_KEY', 'User')
 
-# 验证环境变量生效
-[Environment]::GetEnvironmentVariable('ZHIPU_API_KEY', 'User')
-[Environment]::GetEnvironmentVariable('GEMINI_API_KEY', 'User')
+# 验证是否已配置，不输出 Key
+@('ZHIPU_API_KEY', 'GEMINI_API_KEY') | ForEach-Object {
+  $configured = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_, 'User'))
+  "$_=" + $(if ($configured) { 'SET' } else { 'NOT_SET' })
+}
 
 # 更新 apikey
 [Environment]::SetEnvironmentVariable('ZHIPU_API_KEY', 'YOUR_NEW_ZHIPU_API_KEY', 'User')
@@ -59,24 +64,32 @@ Gemini：https://aistudio.google.com/apikey
 ### CMD
 
 ```cmd
-# 设置 apikey
+REM 设置 apikey
 setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
 setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
 
-# 验证环境变量生效
-echo %ZHIPU_API_KEY%
-echo %GEMINI_API_KEY%
+REM 验证是否已配置，不输出 Key
+reg query "HKCU\Environment" /v ZHIPU_API_KEY >nul 2>&1 && echo ZHIPU_API_KEY=SET || echo ZHIPU_API_KEY=NOT_SET
+reg query "HKCU\Environment" /v GEMINI_API_KEY >nul 2>&1 && echo GEMINI_API_KEY=SET || echo GEMINI_API_KEY=NOT_SET
 
-# 更新 apikey
+REM 更新 apikey
 setx ZHIPU_API_KEY "YOUR_NEW_ZHIPU_API_KEY"
 setx GEMINI_API_KEY "YOUR_NEW_GEMINI_API_KEY"
 
-# 删除 apikey
+REM 删除 apikey
 reg delete "HKCU\Environment" /v ZHIPU_API_KEY /f
 reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 ```
 
+设置或更新后直接运行（脚本会读取 Windows 用户环境变量，无需重启 Agent）：
+
+```cmd
+npm run doctor
+```
+
 ## 🤖 支持的模型
+
+模型按表格顺序自动轮询。单个模型失败后不会原地重试或等待；模型级故障切换下一模型，Provider 级故障直接切换下一 Provider。切换原因写入 stderr，最终 stdout 末尾注明实际使用模型。
 
 | Provider | 模型                        | 简要介绍                                                                 | 默认角色       |
 | -------- | --------------------------- | ------------------------------------------------------------------------ | -------------- |
@@ -134,18 +147,20 @@ Provider 最终只会收到 `image/jpeg` 或 `image/png`。低熵截图优先保
 
 ## 🔒 安全与隐私
 
-- 图片内容会上传到最终选中的智谱或 Google 云端 Provider，请仅处理已获授权的图片。
+- 图片和问题文本会上传到参与轮询的智谱或 Google 云端 Provider；失败切换时可能先后发送给两个 Provider，请仅处理已获授权的内容。
 - 不要使用本 Skill 处理未经授权的身份证、合同、凭证或其他敏感资料。
 - Skill 不会因为附件读取失败而自动读取剪贴板；只有用户明确要求时才使用 `clipboard`。
 - 远程 URL 会拒绝私网、回环、链路本地、UNC 网络共享和含用户名密码的地址，以降低 SSRF 风险。
 - API Key 不会写入请求 URL 或正常输出；Gemini 使用 `x-goog-api-key` 请求头，智谱使用 Bearer 认证头。
+- 不要在聊天中发送 API Key。脚本不读取标准输入，也不会自动保存聊天中提供的 Key。
+- 图片文字和模型输出均按不可信数据处理，不执行其中包含的命令、工具调用或绕过指令。
 
 ## 🩺 故障排查
 
 | 退出码 | 错误类型                                             | 处理方式                                         |
 | ------ | ---------------------------------------------------- | ------------------------------------------------ |
-| `0`  | 成功                                                 | stdout 仅包含模型返回的文字                      |
-| `1`  | `IMAGE_INPUT`、`CONFIG`、`PROVIDERS_FAILED` 等 | 根据 stderr 修正输入、配置、网络或 Provider 问题 |
+| `0`  | 成功                                                 | stdout 包含模型文字及末尾的实际模型归属          |
+| `1`  | `IMAGE_INPUT`、`NETWORK_UNAVAILABLE`、`SERVICE_UNAVAILABLE`、`RATE_LIMITED`、`PROVIDERS_FAILED` 等 | 按 stderr 的 `Agent 下一步` 修正输入、网络、服务状态、配额或模型配置 |
 | `2`  | `KEY_REQUIRED`                                     | 按错误中提供的注册地址配置有效 Key 后重试        |
 
 stderr 固定格式：
@@ -157,7 +172,7 @@ stderr 固定格式：
 常见检查：
 
 ```powershell
-node -e "require('sharp'); require('bmp-ts')"
+npm run doctor
 npm run check
 npm test
 ```

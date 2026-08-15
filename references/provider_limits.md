@@ -24,9 +24,9 @@ Provider 不得重新解析文件路径、直接读取剪贴板或负责首次�
 - 拒绝私网、回环、链路本地、UNC 网络共享和带用户名密码的 URL。
 - 图片在网关中受 100MP 总像素上限约束，BMP 在分配解码缓冲区前先校验文件头尺寸。
 
-## 默认路由
+## 固定轮询与熔断
 
-`VISION_PROVIDER=auto` 时：
+脚本先检查两个 Key，只将已配置的 Provider 加入队列。顺序不可由用户问题修改：
 
 1. `glm-4.1v-thinking-flash`
 2. `glm-4.6v-flash`
@@ -35,20 +35,14 @@ Provider 不得重新解析文件路径、直接读取剪贴板或负责首次�
 5. `gemini-3.5-flash`
 6. `gemini-flash-latest`
 
-任一 GLM 请求返回 HTTP 400 时，立即切换到 Gemini。Gemini 的 429 按错误详情分类：
+同一模型只请求一次，不做原地重试或等待。失败作用域决定下一步：
 
-- `QuotaFailure` 包含 `quotaDimensions.model` 或按模型计算的 `quotaId` 时，属于模型级配额。记录 `RetryInfo.retryDelay`，但不等待、不重试当前模型，立即尝试 Gemini 模型池的下一项。
-- 未包含模型维度的 429 按 Provider 级限流处理。包含 `RetryInfo.retryDelay` 时不执行短间隔无效重试，立即切换备用 Provider；缺少结构化恢复时间时，在当前模型重试 3 次，等待 2/4 秒。
-- 认证失败不重试；网络和 5xx 错误在当前 Provider 完成重试后，再切换备用 Provider。
+- 模型级：404、模型维度配额、空响应和响应解析错误，切换同 Provider 下一模型。
+- Provider 级：认证、网络、超时、Provider 维度配额、HTTP 400/408/429/5xx，立即熔断当前 Provider 并切换下一 Provider。
+- Gemini `QuotaFailure` 包含 `quotaDimensions.model` 或按模型计算的 `quotaId` 时判定为模型级；其他 429 判定为 Provider 级。
+- 每次失败通过 stderr 的 `MODEL_SWITCH`、`MODEL_FAILED`、`PROVIDER_SWITCH` 或 `PROVIDER_FAILED` 告知主 Agent；切换事件包含下一目标，成功 stdout 末尾注明实际模型。
 
-显式模型声明优先于 `VISION_PROVIDER`：
-
-| 用户表达 | 首选顺序 |
-|---|---|
-| 未指定或使用 GLM | GLM 4.1V → GLM 4.6V → Gemini |
-| 使用 `glm-4.6v-flash` | GLM 4.6V → GLM 4.1V → Gemini |
-| 使用 Gemini、Google 或谷歌模型 | Gemini → GLM 4.1V → GLM 4.6V |
-| 指定某个 `gemini-*` | 指定模型 → 其他 Gemini → GLM |
+用户问题中的 GLM、Gemini 或具体模型名称只是发送给视觉模型的任务文本，不参与路由。
 
 ## Provider 图片准备
 
@@ -70,7 +64,6 @@ Provider 输入已经是 JPEG/PNG，只执行自身尺寸与体积限制。低�
 
 | 环境变量 | 说明 |
 |---|---|
-| `VISION_PROVIDER` | `auto`、`gemini` 或 `zhipu`；只调整首选顺序 |
 | `GEMINI_MODELS` | 逗号分隔的 Gemini 模型回退顺序 |
 | `ZHIPU_MODELS` | 逗号分隔的智谱模型回退顺序 |
 | `ZHIPU_MODEL` | 兼容单模型配置，覆盖默认智谱列表 |

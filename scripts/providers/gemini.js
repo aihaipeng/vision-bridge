@@ -1,5 +1,5 @@
 const { prepareImage } = require('../image_preparer');
-const { ProviderError, singleLine } = require('../errors');
+const { ProviderError, providerFailureScope, singleLine } = require('../errors');
 const { fetchWithTimeout } = require('./http');
 
 const PROVIDER = 'gemini';
@@ -10,8 +10,6 @@ const DEFAULT_MODELS = [
   'gemini-3.5-flash',
   'gemini-flash-latest',
 ];
-const RETRIES = 3;
-const RETRY_BASE_DELAY = 2000;
 // Inline requests are limited to 20MB total. 14MB raw leaves room for Base64 expansion and JSON/text.
 const IMAGE_PROFILE = {
   label: 'Gemini inline image',
@@ -21,10 +19,6 @@ const IMAGE_PROFILE = {
   qualitySearchIterations: 4,
   compressionProfiles: [[8192, 92], [6144, 90], [4096, 86], [3200, 82], [2400, 78], [1800, 72], [1400, 68], [1024, 60]],
 };
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function extractText(data, model) {
   const parts = data && data.candidates && data.candidates[0]
@@ -85,75 +79,80 @@ function providerQuotaMessage(retryAfterMs) {
   return `Gemini Provider 达到配额限制${retryHint}`;
 }
 
-async function requestModel({ model, payload, key, fetchImpl, sleepImpl = sleep }) {
+async function requestModel({ model, payload, key, fetchImpl }) {
   const url = API_URL.replace('{model}', encodeURIComponent(model));
-  for (let attempt = 0; attempt < RETRIES; attempt += 1) {
-    let response;
-    try {
-      response = await fetchWithTimeout(fetchImpl, url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(payload),
-      });
-    } catch (error) {
-      if (attempt < RETRIES - 1) {
-        await sleepImpl(RETRY_BASE_DELAY * (2 ** attempt));
-        continue;
-      }
-      throw new ProviderError(PROVIDER, 'NETWORK', `Gemini 网络请求失败: ${singleLine(error.message || error)}`, {
-        model, retryable: true, cause: error,
-      });
-    }
+  let response;
+  try {
+    response = await fetchWithTimeout(fetchImpl, url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    throw new ProviderError(PROVIDER, 'NETWORK', `Gemini 网络请求失败: ${singleLine(error.message || error)}`, {
+      model, retryable: true, cause: error,
+    });
+  }
 
-    const raw = await response.text();
-    if (response.ok) {
-      let data;
-      try { data = JSON.parse(raw); }
-      catch (error) {
-        throw new ProviderError(PROVIDER, 'INVALID_JSON', `模型 ${model} 返回了非 JSON 响应`, { model, cause: error });
-      }
-      return extractText(data, model);
+  const raw = await response.text();
+  if (response.ok) {
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (error) {
+      throw new ProviderError(PROVIDER, 'INVALID_JSON', `模型 ${model} 返回了非 JSON 响应`, { model, cause: error });
     }
+    return extractText(data, model);
+  }
 
-    const auth = isAuthError(response.status, raw);
-    if (auth) {
-      throw new ProviderError(PROVIDER, 'AUTH', `Gemini API key 无效或无权访问（HTTP ${response.status}）`, {
-        model, status: response.status, auth: true,
-      });
-    }
-    const limit = response.status === 429 ? rateLimitDetails(raw) : null;
-    if (limit && limit.quotaScope === 'model') {
-      throw new ProviderError(PROVIDER, 'MODEL_RATE_LIMIT', modelQuotaMessage(model, limit.retryAfterMs), {
-        model,
-        status: response.status,
-        quotaScope: limit.quotaScope,
-        retryAfterMs: limit.retryAfterMs,
-      });
-    }
-    if (limit && limit.quotaScope === 'provider' && limit.retryAfterMs) {
-      throw new ProviderError(PROVIDER, 'PROVIDER_RATE_LIMIT', providerQuotaMessage(limit.retryAfterMs), {
-        model,
-        status: response.status,
-        quotaScope: limit.quotaScope,
-        retryAfterMs: limit.retryAfterMs,
-      });
-    }
-    const retryable = response.status === 429 || response.status >= 500;
-    if (retryable && attempt < RETRIES - 1) {
-      await sleepImpl(RETRY_BASE_DELAY * (2 ** attempt));
-      continue;
-    }
-    throw new ProviderError(PROVIDER, 'HTTP', `模型 ${model} 调用失败（HTTP ${response.status}）: ${singleLine(raw).slice(0, 300)}`, {
+  const auth = isAuthError(response.status, raw);
+  if (auth) {
+    throw new ProviderError(PROVIDER, 'AUTH', `Gemini API key 无效或无权访问（HTTP ${response.status}）`, {
+      model, status: response.status, auth: true,
+    });
+  }
+  const limit = response.status === 429 ? rateLimitDetails(raw) : null;
+  if (limit && limit.quotaScope === 'model') {
+    throw new ProviderError(PROVIDER, 'MODEL_RATE_LIMIT', modelQuotaMessage(model, limit.retryAfterMs), {
+      model,
+      status: response.status,
+      quotaScope: limit.quotaScope,
+      retryAfterMs: limit.retryAfterMs,
+    });
+  }
+  if (limit && limit.quotaScope === 'provider' && limit.retryAfterMs) {
+    throw new ProviderError(PROVIDER, 'PROVIDER_RATE_LIMIT', providerQuotaMessage(limit.retryAfterMs), {
+      model,
+      status: response.status,
+      quotaScope: limit.quotaScope,
+      retryAfterMs: limit.retryAfterMs,
+    });
+  }
+  const modelUnavailable = response.status === 503 && /(?:this\s+model|model).*(?:high\s+demand|unavailable)/i.test(raw);
+  const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+  throw new ProviderError(PROVIDER, modelUnavailable ? 'MODEL_UNAVAILABLE' : 'HTTP', `模型 ${model} 调用失败（HTTP ${response.status}）: ${singleLine(raw).slice(0, 300)}`, {
       model,
       status: response.status,
       retryable,
       quotaScope: limit && limit.quotaScope,
       retryAfterMs: limit && limit.retryAfterMs,
-    });
-  }
+      scope: modelUnavailable ? 'model' : undefined,
+  });
 }
 
-async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl, sleepImpl }) {
+function failureDetails(model, error) {
+  return {
+    provider: PROVIDER,
+    model,
+    code: error instanceof ProviderError ? error.code : 'UNEXPECTED',
+    status: error instanceof ProviderError ? error.status : undefined,
+    auth: error instanceof ProviderError && error.auth,
+    quotaScope: error instanceof ProviderError ? error.quotaScope : undefined,
+    scope: providerFailureScope(error),
+    message: singleLine(error.message || error),
+  };
+}
+
+async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl, onStatus, fallbackTarget }) {
   const prepared = await prepareImage(image, IMAGE_PROFILE);
   const payload = {
     contents: [{
@@ -165,21 +164,31 @@ async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl
     }],
   };
   const failures = [];
-  for (const model of models) {
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
     try {
-      const text = await requestModel({ model, payload, key, fetchImpl, sleepImpl });
+      const text = await requestModel({ model, payload, key, fetchImpl });
       return { text, model, provider: PROVIDER };
     } catch (error) {
-      if (error instanceof ProviderError && error.quotaScope === 'provider') throw error;
-      if (error instanceof ProviderError && error.quotaScope === 'model') {
-        failures.push(`${model}: ${singleLine(error.message || error)}`);
-        continue;
+      const failure = failureDetails(model, error);
+      failures.push(failure);
+      const next = failure.scope === 'provider'
+        ? fallbackTarget
+        : (models[index + 1] ? `${PROVIDER}/${models[index + 1]}` : fallbackTarget);
+      const type = failure.scope === 'provider'
+        ? (next ? 'provider_switch' : 'provider_failed')
+        : (next ? 'model_switch' : 'model_failed');
+      if (onStatus) onStatus({ type, ...failure, next });
+      if (failure.scope === 'provider') {
+        throw new ProviderError(PROVIDER, 'PROVIDER_UNAVAILABLE', `${model} 发生 Provider 级故障: ${failure.message}`, {
+          failures,
+        });
       }
-      if (error instanceof ProviderError && (error.auth || error.retryable || error.code === 'NETWORK')) throw error;
-      failures.push(`${model}: ${singleLine(error.message || error)}`);
     }
   }
-  throw new ProviderError(PROVIDER, 'MODELS_FAILED', `所有 Gemini 模型均失败: ${failures.join(' | ')}`);
+  throw new ProviderError(PROVIDER, 'MODELS_FAILED', `所有 Gemini 模型均失败: ${failures.map((item) => `${item.model}: ${item.message}`).join(' | ')}`, {
+    failures,
+  });
 }
 
 module.exports = { API_URL, DEFAULT_MODELS, IMAGE_PROFILE, PROVIDER, describe, requestModel };
