@@ -1,10 +1,17 @@
 # 故障排查与恢复
 
-仅在依赖、密钥、代理、剪贴板、退出码或 Provider 调用失败时读取本文件。
+仅在实际进入 img2txt SOP 后，处理依赖、密钥、代理、退出码或 Provider 调用失败时读取本文件。Agent 原生处理不需要运行 doctor、配置 SOP Provider Key 或读取本文件。
+
+## 先确认执行路径
+
+- 当前模型支持图片输入且用户未显式要求 `img2txt`：由 Agent 原生处理，结果标注 `[识别方式: Agent 原生视觉]`。
+- 用户显式要求 `img2txt`，或当前模型不支持图片输入：进入 img2txt SOP。
+- 系统剪贴板由 Agent 读取，不作为进入 SOP 的条件。Agent 取得图片后，再按上述两条选择执行路径；没有可读图片时自动读取系统剪贴板一次并提示用户，剪贴板也没有图片时请用户重新上传或提供路径。
+- 原生视觉不可用但已有真实路径、URL、Data URL 或 Base64 时，直接把这些输入交给 SOP，不读取剪贴板。
 
 ## 命令行说明
 
-先确认当前命令执行器是 CMD、PowerShell 还是 Bash/Git Bash/MSYS，不要混用语法。所有终端都使用 `scripts/describe_image.js`；Bash 中将 Windows 本地路径写成 `C:/...` 并使用单引号，避免反斜杠被解释为转义字符。
+先确认当前命令执行器是 CMD、PowerShell、Bash、zsh 还是 Git Bash/MSYS，不要混用语法。所有终端都使用 `scripts/describe_image.js`；Bash/zsh 中将 Windows 本地路径写成 `C:/...` 并使用单引号，避免反斜杠被解释为转义字符。
 
 如果工具支持 `cwd` 或 `workdir`，直接将其设置为 Skill 目录。必须在命令中切换目录时，分别使用：
 
@@ -22,7 +29,7 @@ cd 'C:/path/to/img2txt'
 
 ## 依赖检查
 
-本会话首次使用或发生运行错误后，从 Skill 目录运行：
+本会话首次进入 SOP 或 SOP 发生运行错误后，从 Skill 目录运行：
 
 ```cmd
 npm run doctor
@@ -48,7 +55,7 @@ npm ci --omit=dev
 - 智谱：[https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
 - Gemini：[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 
-不要要求用户在聊天中发送 Key，也不要通过标准输入或命令参数把用户发来的 Key 传给脚本。请用户在自己的终端设置 Windows 当前用户环境变量：
+不要要求用户在聊天中发送 Key，也不要通过标准输入或命令参数把用户发来的 Key 传给脚本。Windows 用户在自己的终端设置当前用户环境变量：
 
 ```cmd
 setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
@@ -56,29 +63,31 @@ setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
 ```
 
 `setx` 不会修改已经运行的进程。脚本会直接读取用户级持久化值，因此可以在当前会话重新调用。
-设置或更新后直接运行 `npm run doctor`；脚本会读取 Windows 用户环境变量，无需重启 Agent。看到至少一个 `API_KEY: 已配置` 后重新执行识图。脚本不支持单次 Key，也不会自动持久化 Key。
+macOS 用户在启动 Agent 的同一 shell 环境中配置进程环境变量：
 
-## 剪贴板与重试缓存
+```bash
+export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
+export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+npm run doctor
+```
 
-`clipboard` 优先读取 Windows 剪贴板位图，没有位图时回退到文件列表中的第一个图片文件。
+Windows 设置或更新后直接运行 `npm run doctor`，脚本会读取用户环境变量，无需重启 Agent。macOS 的 Agent 进程必须继承上述环境变量。看到至少一个 `API_KEY: 已配置` 后重新执行识图。脚本不支持通过标准输入或命令参数接收 Key，也不会自动持久化。
 
-用户在当前请求中明确说明图片位于剪贴板时，调用 `clipboard`。两类当前回合信号触发受控自动回退：平台图片附件没有可读取的真实路径；当前 Agent、图片加载器或系统刚产生 `Cannot read '<name>' (this model does not support image input)`、`Unsupported Image` 等图片能力错误。立即调用 `clipboard-fallback`，不要解释模型限制或询问用户是否处理。脚本会在读取前输出 `CLIPBOARD_FALLBACK`，成功后在 stdout 标注剪贴板来源。
+## CLI 剪贴板兼容
 
-以下情况不授权自动读取剪贴板：过去消息中的图片、用户在普通文字中引用或讨论 `Cannot read`/`Unsupported Image` 错误、普通路径不存在、已有文件无法解码。必须区分“本回合由 Agent/平台刚产生的错误”和“用户提供的错误文本”。
+系统剪贴板由 Agent 读取，不作为进入 SOP 的条件。内置 CLI 仍兼容 `clipboard` 输入：Windows 使用 PowerShell；macOS 使用系统自带的 `osascript`/AppKit，不依赖 `pngpaste` 或其他 Homebrew 工具。没有其他可读图片输入时，Skill 自动调用 `clipboard` 读取一次并提示用户；`clipboard-fallback` 仅作为 CLI 兼容参数保留。
 
-如果当前图片附件只有显示名而没有可读取的真实路径：
+缺少 Key 或 Provider 失败时，CLI 可能返回 `img2txt_retry_*` 临时路径。完成本机 Key 配置并通过 doctor 后，使用该路径重试。
 
-1. 不要把显示名当路径，也不要检查或搜索工作目录。
-2. 立即使用 `clipboard-fallback` 读取当前 Windows 剪贴板一次。
-3. 成功时保留 stdout 中的 `[图片来源: Windows 剪贴板（图片直读失败回退）]`；失败时按错误中的 `Agent 下一步` 请用户重新上传或提供绝对路径。
+### macOS 实机验收
 
-在 OpenCode 或 Claude Code 中粘贴到聊天的图片不一定仍保留在 Windows 剪贴板中。如果 `clipboard-fallback` 返回 `IMAGE_INPUT`：
+先复制一张截图，再在 Skill 目录运行：
 
-1. 不要重复调用剪贴板，不要检查工作目录，也不要猜测文件名。
-2. 请用户提供图片的绝对路径，或重新上传为会话能够提供真实路径的附件。
-3. 取得路径后使用原问题重新调用脚本，不要再读取剪贴板。
+```bash
+node scripts/describe_image.js clipboard '描述图片内容'
+```
 
-缺少 Key 或 Provider 失败时，脚本可能返回 `img2txt_retry_*` 临时路径。用户完成本机配置并通过 doctor 验证后，使用该路径重试，不要再次读取剪贴板。受控回退缓存会保留剪贴板来源标记，后续成功输出仍会注明来源。成功后缓存立即删除；超过缓存有效期的文件会在后续调用启动时清理。
+随后在 Finder 中复制一个图片文件并重复命令。两次都应进入视觉模型，且临时目录中不应残留 `vision_clip_*.png`。如果 stderr 报告无法调用 `osascript`，确认命令存在且当前终端/Agent 有权读取系统剪贴板。
 
 ## 轮询状态
 

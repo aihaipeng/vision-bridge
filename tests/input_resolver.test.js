@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const {
+    clipboardImagePath,
+    clipboardSystemName,
     createPinnedLookup,
     isPublicIp,
     normalizeRemoteUrl,
@@ -44,6 +46,66 @@ test('standardizes local paths, extensionless files, file URLs, and SVG text', a
 
     image = await standardizeImageInput('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>');
     assert.equal(image.mime, 'image/png');
+});
+
+test('reads the macOS clipboard through built-in AppKit with bitmap-first file fallback', async (t) => {
+    const pngBytes = await createPngBytes();
+    const tempDir = createTempDir(t);
+    const calls = [];
+    const image = await standardizeImageInput('clipboard', {
+        clipboard: {
+            platform: 'darwin',
+            tmpDir: tempDir,
+            pid: 4242,
+            spawnSyncImpl(command, args, options) {
+                calls.push({ command, args, options });
+                fs.writeFileSync(args.at(-1), pngBytes);
+                return { status: 0, stdout: 'bitmap\n' };
+            },
+        },
+    });
+
+    assert.equal(image.mime, 'image/png');
+    assert.ok(image.data.equals(pngBytes));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, 'osascript');
+    assert.deepEqual(calls[0].args.slice(0, 3), ['-l', 'JavaScript', '-e']);
+    const script = calls[0].args[3];
+    assert.match(script, /NSPasteboard\.generalPasteboard/);
+    assert.ok(script.indexOf('imageClasses.addObject($.NSImage)') < script.indexOf('urlClasses.addObject($.NSURL)'));
+    assert.match(script, /NSPasteboardURLReadingContentsConformToTypesKey/);
+    assert.match(script, /NSPasteboardURLReadingFileURLsOnlyKey/);
+    assert.equal(fs.existsSync(path.join(tempDir, 'vision_clip_4242.png')), false);
+});
+
+test('preserves Windows clipboard file fallback and rejects unsupported platforms', async (t) => {
+    const pngBytes = await createPngBytes();
+    const tempDir = createTempDir(t);
+    const imagePath = path.join(tempDir, 'copied-image.png');
+    fs.writeFileSync(imagePath, pngBytes);
+    const commands = [];
+    const image = await standardizeImageInput('clipboard', {
+        clipboard: {
+            platform: 'win32',
+            tmpDir: tempDir,
+            pid: 4343,
+            spawnSyncImpl(command) {
+                commands.push(command);
+                return commands.length === 1
+                    ? { status: 1, stdout: '' }
+                    : { status: 0, stdout: `${imagePath}\r\n` };
+            },
+        },
+    });
+
+    assert.equal(image.mime, 'image/png');
+    assert.deepEqual(commands, ['powershell', 'powershell']);
+    assert.throws(
+        () => clipboardImagePath({ platform: 'linux' }),
+        (error) => error instanceof ImageStandardizationError && /Windows 和 macOS/.test(error.message),
+    );
+    assert.equal(clipboardSystemName('win32'), 'Windows');
+    assert.equal(clipboardSystemName('darwin'), 'macOS');
 });
 
 test('rejects unsafe or malformed inputs', async () => {

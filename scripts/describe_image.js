@@ -1,7 +1,11 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { standardizeImageInput, ImageStandardizationError } = require('./image_input_resolver');
+const {
+  clipboardSystemName,
+  standardizeImageInput,
+  ImageStandardizationError,
+} = require('./image_input_resolver');
 const { prepareImage } = require('./image_preparer');
 const { CliError, ProviderError, formatCliError, singleLine } = require('./errors');
 const {
@@ -151,9 +155,9 @@ function firstTarget(provider, geminiModels, zhipuModels) {
   return models.length ? `${provider}/${models[0]}` : provider;
 }
 
-function formatStatusEvent(event) {
+function formatStatusEvent(event, platform = process.platform) {
   if (event.type === 'clipboard_fallback') {
-    return '[WARN] CLIPBOARD_FALLBACK: 当前回合图片无法直接读取（模型不支持图片输入或附件路径缺失），正在读取当前 Windows 剪贴板';
+    return `[WARN] CLIPBOARD_FALLBACK: 当前回合图片无法直接读取（模型不支持图片输入或附件路径缺失），正在读取当前 ${clipboardSystemName(platform)} 剪贴板`;
   }
   if (event.type === 'provider_available') {
     return `[INFO] PROVIDER_AVAILABLE: ${event.provider} 已配置，模型 ${event.models.join(', ')}`;
@@ -176,17 +180,17 @@ function formatStatusEvent(event) {
   return `[WARN] MODEL_FAILED: ${event.provider}/${event.model} 失败（${reason}），没有更多可用模型`;
 }
 
-function formatSuccessfulOutput(result, options = {}) {
+function formatSuccessfulOutput(result, options = {}, platform = process.platform) {
   const text = String(result.text || '')
     .replace(/<\|(?:begin|end)_of_box\|>/g, '')
     .trim();
   const source = options.clipboardFallback
-    ? '\n\n[图片来源: Windows 剪贴板（图片直读失败回退）]'
+    ? `\n\n[图片来源: ${clipboardSystemName(platform)} 剪贴板（图片直读失败回退）]`
     : '';
   return `${text}${source}\n\n[识别模型: ${result.provider}/${result.model}]`;
 }
 
-function imageInputCliError(error, inputMode) {
+function imageInputCliError(error, inputMode, platform = process.platform) {
   const message = error && (error.message || error);
   const exitCode = error instanceof ImageStandardizationError ? error.code : 1;
   if (!inputMode.clipboardFallbackRead) {
@@ -194,7 +198,7 @@ function imageInputCliError(error, inputMode) {
   }
   return new CliError(
     'IMAGE_INPUT',
-    `图片直读失败后已尝试读取当前 Windows 剪贴板，但没有取得可用图片（${singleLine(message)}）。Agent 下一步：请用户重新上传图片或提供绝对路径；不要搜索工作目录或重复读取剪贴板`,
+    `图片直读失败后已尝试读取当前 ${clipboardSystemName(platform)} 剪贴板，但没有取得可用图片（${singleLine(message)}）。Agent 下一步：请用户重新上传图片或提供绝对路径；不要搜索工作目录或重复读取剪贴板`,
     exitCode,
     error,
   );

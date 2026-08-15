@@ -48,11 +48,16 @@ test('clipboard fallback is explicit, observable, and attributed in successful o
         clipboard: false,
     });
     assert.match(formatStatusEvent({ type: 'clipboard_fallback' }), /^\[WARN\] CLIPBOARD_FALLBACK:/);
+    assert.match(formatStatusEvent({ type: 'clipboard_fallback' }, 'darwin'), /当前 macOS 剪贴板/);
 
     const result = { text: '识别成功', provider: 'zhipu', model: 'glm-one' };
     assert.equal(
         formatSuccessfulOutput(result, mode),
         '识别成功\n\n[图片来源: Windows 剪贴板（图片直读失败回退）]\n\n[识别模型: zhipu/glm-one]',
+    );
+    assert.equal(
+        formatSuccessfulOutput(result, mode, 'darwin'),
+        '识别成功\n\n[图片来源: macOS 剪贴板（图片直读失败回退）]\n\n[识别模型: zhipu/glm-one]',
     );
     assert.equal(isClipboardFallbackRetryCache('img2txt_retry_clipboard_fallback_123.png'), true);
     assert.equal(isClipboardFallbackRetryCache('img2txt_retry_123.png'), false);
@@ -87,6 +92,13 @@ test('clipboard fallback reads once and gives the Agent one safe recovery path',
     assert.match(error.message, /已尝试读取当前 Windows 剪贴板/);
     assert.match(error.message, /重新上传图片或提供绝对路径/);
     assert.match(error.message, /不要搜索工作目录或重复读取剪贴板/);
+
+    const macError = imageInputCliError(
+        new ImageStandardizationError('错误: 剪贴板中没有图片'),
+        mode,
+        'darwin',
+    );
+    assert.match(macError.message, /已尝试读取当前 macOS 剪贴板/);
 });
 
 test('falls back across Providers and skips missing credentials', async () => {

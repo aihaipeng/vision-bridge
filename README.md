@@ -2,34 +2,39 @@
 
 `img2txt` 是一个面向智能体的图像理解 Skill，可集成到 Claude Code、Codex、OpenCode 、Reasonix 等任何能执行 Node 脚本的智能体。  
 
+Skill 采用 Agent 优先的双路径：当前模型支持图片输入且用户未点名 `img2txt` 时，由 Agent 原生处理；只有用户显式要求 `img2txt` 或当前模型不支持图片输入时，才进入 img2txt SOP。
+
 能力：
 
 - 提取图片中的可见文字（OCR）
 - 描述和分析图片、截图、界面、图表、流程图及错误信息
-- 当前消息的图片附件缺少真实路径时，受控读取当前 Windows 剪贴板
+- Agent 可从附件、路径、URL、Base64 或系统剪贴板取得图片
+- Agent 原生结果标注 `[识别方式: Agent 原生视觉]`；SOP 结果标注实际 `[识别模型: provider/model]`
 
-## ⚙️ 运行要求
+## ⚙️ 执行边界
 
-- Windows 10/11
-- Node.js 20.9 或更高版本
-- npm
+Agent 原生处理只依赖当前 Agent 的图片能力，不需要本仓库运行时、Provider Key 或额外网络请求。
+
+img2txt SOP 需要：
+
+- Windows 10/11，或带系统 `osascript`/AppKit 的 macOS
+- Node.js 20.9 或更高版本及 npm
 - 可访问智谱或 Gemini API 的出站 HTTPS 网络
-- 使用 `clipboard` 输入时，允许读取 Windows 剪贴板
+- 至少一个 Provider API Key
 
 ## 🚀 快速开始
 
-至少配置一个 Provider 的 API Key。
-
-配置完成后，直接在对话中上传图片或提供图片来源，并说明任务。例如：
+直接在对话中上传图片或提供图片来源，并说明任务。例如：
 
 - 上传图片后说：“请详细描述这张图片。”
 - 提供本地路径：“提取 `C:\images\receipt.png` 中的文字。”
 - 提供公开 URL：“分析 `https://example.com/chart.png` 中的数据趋势。”
 - 使用剪贴板：“读取剪贴板中的截图并解释报错。”
+- 显式 SOP：“使用 img2txt 提取这张图片中的文字。”
 
-仅发送图片而不附带说明时，Skill 会自动详细描述图片。
+仅发送图片而不附带说明时，具备视觉能力的 Agent 会直接详细描述并标注原生视觉，不进入 SOP。只有进入 img2txt SOP 时才需要配置 Provider API Key。
 
-## 🔑 申请并设置 API Key
+## 🔑 SOP API Key
 
 智谱：https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys
 
@@ -83,7 +88,17 @@ reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 npm run doctor
 ```
 
-## 🤖 支持的模型
+### macOS Bash/zsh
+
+```bash
+export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
+export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+npm run doctor
+```
+
+macOS 的 Agent 进程必须继承这些环境变量；脚本不会从聊天、标准输入或命令参数接收 Key。
+
+## 🤖 SOP 支持的模型
 
 模型按表格顺序自动轮询。
 
@@ -97,7 +112,7 @@ npm run doctor
 | Gemini   | `gemini-flash-latest`     | 指向当前最新 Gemini Flash 的浮动别名，实际版本可能随 Google 更新而变化。 | 
 
 
-## 📥 支持的图片输入
+## 📥 SOP 支持的图片输入
 
 | 输入来源           | 示例                              | 说明                               |
 | ------------------ | --------------------------------- | ---------------------------------- |
@@ -108,10 +123,8 @@ npm run doctor
 | 裸 Base64          | `iVBORw0KGgo...`                | 解码后仍执行真实格式校验           |
 | SVG 文本           | `<svg ...>...</svg>`            | 渲染为 PNG 后发送                  |
 | 聊天附件路径       | Agent 提供的真实绝对路径          | 仅显示名不等于可读取路径           |
-| Windows 剪贴板     | `clipboard`                     | 仅在用户明确要求时读取             |
-| 图片直读失败回退   | `clipboard-fallback`            | 当前附件无路径或本回合平台/模型报告不支持图片输入时使用 |
 
-## 🖼️ 支持的图片格式
+## 🖼️ SOP 支持的图片格式
 
 格式按实际文件字节识别，不依赖扩展名、URL 后缀、HTTP `Content-Type` 或 Data URL 声明。
 
@@ -144,12 +157,13 @@ Provider 最终只会收到 `image/jpeg` 或 `image/png`。低熵截图优先保
 
 ## 🔒 安全与隐私
 
-- 图片与问题会上传到模型供应商云端，请仅处理已获授权的内容。
-- 剪贴板读取：当用户明确要求、附件无可读路径、模型/系统图片能力错误时触发。
+- Agent 原生处理遵循当前平台的图片处理与隐私策略；SOP 会把图片与问题上传到实际轮询到的视觉 Provider。
+- 请仅处理已获授权的内容。
+- 系统剪贴板由 Agent 读取，不作为进入 SOP 的条件。
 - 远程 URL 拒绝私网、回环、链路本地、UNC 和带凭据的地址。
 - API Key 通过请求头发送，不写入 URL 或输出；请勿在聊天中发送 Key。
 
-## 🩺 故障排查
+## 🩺 SOP 故障排查
 
 | 退出码 | 错误类型                                             | 处理方式                                         |
 | ------ | ---------------------------------------------------- | ------------------------------------------------ |
@@ -180,3 +194,4 @@ npm test
 - [智谱 API Key 管理](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
 - [智谱对话补全 API](https://docs.bigmodel.cn/api-reference/%E6%A8%A1%E5%9E%8B-api/%E5%AF%B9%E8%AF%9D%E8%A1%A5%E5%85%A8)
 - [智谱视觉模型](https://docs.bigmodel.cn/cn/guide/models/vlm)
+- [Apple NSPasteboard](https://developer.apple.com/documentation/appkit/nspasteboard)

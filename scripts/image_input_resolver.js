@@ -14,6 +14,45 @@ const REMOTE_TIMEOUT_MS = 30000;
 const MAX_REDIRECTS = 5;
 const MAX_DOWNLOAD_BYTES = MAX_DOWNLOAD_MB * 1024 * 1024;
 const BING_THUMBNAIL_HOSTS = new Set(['bing.com', 'www.bing.com', 'cn.bing.com']);
+const MACOS_CLIPBOARD_SCRIPT = String.raw`
+ObjC.import('AppKit');
+ObjC.import('Foundation');
+
+function writeImageAsPng(image, destination) {
+  if (!image || image.isNil()) return false;
+  const tiffData = image.TIFFRepresentation;
+  if (!tiffData || tiffData.length === 0) return false;
+  const representation = $.NSBitmapImageRep.imageRepWithData(tiffData);
+  if (!representation || representation.isNil()) return false;
+  const pngData = representation.representationUsingTypeProperties($.NSPNGFileType, $({}));
+  return Boolean(pngData && pngData.writeToFileAtomically($(destination), true));
+}
+
+function run(argv) {
+  const destination = argv[0];
+  const pasteboard = $.NSPasteboard.generalPasteboard;
+
+  const imageClasses = $.NSMutableArray.array;
+  imageClasses.addObject($.NSImage);
+  const images = pasteboard.readObjectsForClassesOptions(imageClasses, $());
+  if (images && images.count > 0 && writeImageAsPng(images.objectAtIndex(0), destination)) {
+    return 'bitmap';
+  }
+
+  const fileOptions = $.NSMutableDictionary.dictionary;
+  fileOptions.setObjectForKey($.NSImage.imageTypes, $('NSPasteboardURLReadingContentsConformToTypesKey'));
+  fileOptions.setObjectForKey($.NSNumber.numberWithBool(true), $('NSPasteboardURLReadingFileURLsOnlyKey'));
+  const urlClasses = $.NSMutableArray.array;
+  urlClasses.addObject($.NSURL);
+  const urls = pasteboard.readObjectsForClassesOptions(urlClasses, fileOptions);
+  if (urls && urls.count > 0) {
+    const image = $.NSImage.alloc.initWithContentsOfURL(urls.objectAtIndex(0));
+    if (writeImageAsPng(image, destination)) return 'file';
+  }
+
+  throw new Error('clipboard does not contain an image');
+}
+`;
 
 const NON_PUBLIC_IPS = new net.BlockList();
 const NON_PUBLIC_SUBNETS = {
@@ -65,19 +104,50 @@ function raiseImageError(message, code = 1) {
   throw new ImageStandardizationError(message, code);
 }
 
-function clipboardImagePath() {
-  if (process.platform !== 'win32') {
-    raiseImageError('错误: clipboard 模式仅支持 Windows，请把图片保存成文件后再提供路径');
-  }
-  const tmp = path.join(os.tmpdir(), `vision_clip_${process.pid}.png`);
-  const save = spawnSync('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $img = Get-Clipboard -Format Image } catch { $img = $null }; if ($img) { $img.Save('" + tmp.replace(/'/g, "''") + "') } else { exit 1 }"] , { stdio: 'ignore' });
-  if (save.status === 0 && fs.existsSync(tmp)) return { filePath: tmp, isTemp: true };
-  const files = spawnSync('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $f = Get-Clipboard -Format FileDropList } catch { $f = $null }; if ($f -and $f.Count -gt 0) { Write-Output $f[0].FullName } else { exit 1 }"], { encoding: 'utf8' });
+function clipboardSystemName(platform = process.platform) {
+  if (platform === 'win32') return 'Windows';
+  if (platform === 'darwin') return 'macOS';
+  return '系统';
+}
+
+function windowsClipboardImagePath({ spawnSyncImpl, existsSync, tmpDir, pid }) {
+  const tmp = path.join(tmpDir, `vision_clip_${pid}.png`);
+  const save = spawnSyncImpl('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $img = Get-Clipboard -Format Image } catch { $img = $null }; if ($img) { $img.Save('" + tmp.replace(/'/g, "''") + "') } else { exit 1 }"] , { stdio: 'ignore' });
+  if (save.status === 0 && existsSync(tmp)) return { filePath: tmp, isTemp: true };
+  const files = spawnSyncImpl('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $f = Get-Clipboard -Format FileDropList } catch { $f = $null }; if ($f -and $f.Count -gt 0) { Write-Output $f[0].FullName } else { exit 1 }"], { encoding: 'utf8' });
   if (files.status === 0) {
     const filePath = (files.stdout || '').trim().split(/\r?\n/)[0];
-    if (filePath && fs.existsSync(filePath)) return { filePath, isTemp: false };
+    if (filePath && existsSync(filePath)) return { filePath, isTemp: false };
   }
   raiseImageError('错误: 剪贴板中没有图片。请重新用截图工具或右键复制图片，或先把图片保存成文件再提供路径');
+}
+
+function macosClipboardImagePath({ spawnSyncImpl, existsSync, rmSync, tmpDir, pid }) {
+  const tmp = path.join(tmpDir, `vision_clip_${pid}.png`);
+  const result = spawnSyncImpl('osascript', ['-l', 'JavaScript', '-e', MACOS_CLIPBOARD_SCRIPT, tmp], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.status === 0 && existsSync(tmp)) return { filePath: tmp, isTemp: true };
+  if (existsSync(tmp)) rmSync(tmp, { force: true });
+  if (result.error) {
+    raiseImageError(`错误: 无法调用 macOS 系统剪贴板工具 osascript: ${result.error.message || result.error}`);
+  }
+  raiseImageError('错误: 剪贴板中没有图片。请重新用截图工具或右键复制图片，或先把图片保存成文件再提供路径');
+}
+
+function clipboardImagePath(options = {}) {
+  const dependencies = {
+    platform: options.platform ?? process.platform,
+    spawnSyncImpl: options.spawnSyncImpl || spawnSync,
+    existsSync: options.existsSync || fs.existsSync,
+    rmSync: options.rmSync || fs.rmSync,
+    tmpDir: options.tmpDir || os.tmpdir(),
+    pid: options.pid ?? process.pid,
+  };
+  if (dependencies.platform === 'win32') return windowsClipboardImagePath(dependencies);
+  if (dependencies.platform === 'darwin') return macosClipboardImagePath(dependencies);
+  raiseImageError('错误: clipboard 模式仅支持 Windows 和 macOS，请把图片保存成文件后再提供路径');
 }
 
 function resolveLocalImage(filePath, source) {
@@ -226,11 +296,11 @@ function looksLikeLocalPath(value) {
   return /^[^<>:"|?*\r\n]+\.[A-Za-z0-9]{1,16}$/.test(value);
 }
 
-async function resolveImageInput(input) {
+async function resolveImageInput(input, options = {}) {
   const value = String(input || '').trim();
   if (!value) raiseImageError('错误: 图片输入不能为空');
   if (value === 'clipboard') {
-    const { filePath, isTemp } = clipboardImagePath();
+    const { filePath, isTemp } = clipboardImagePath(options.clipboard);
     try { return resolveLocalImage(filePath, 'clipboard'); }
     finally { if (isTemp && fs.existsSync(filePath)) fs.rmSync(filePath, { force: true }); }
   }
@@ -250,9 +320,9 @@ async function resolveImageInput(input) {
   raiseImageError(`错误: 无法识别图片输入，请提供本地路径、公开 http(s) URL、data URL、裸 Base64 或 clipboard: ${input}`);
 }
 
-async function standardizeImageInput(input) {
+async function standardizeImageInput(input, options = {}) {
   try {
-    return await canonicalizeImage(await resolveImageInput(input));
+    return await canonicalizeImage(await resolveImageInput(input, options));
   } catch (error) {
     if (error instanceof ImageStandardizationError) throw error;
     if (error instanceof ImagePreparationError) raiseImageError(`错误: ${error.message}`);
@@ -261,6 +331,8 @@ async function standardizeImageInput(input) {
 }
 
 module.exports = {
+  clipboardImagePath,
+  clipboardSystemName,
   createPinnedLookup,
   ImageStandardizationError,
   isPublicIp,
