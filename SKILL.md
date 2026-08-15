@@ -1,6 +1,6 @@
 ---
 name: img2txt
-description: '图片 OCR、描述与分析。模型能直接看图且用户未指定 img2txt 时直接处理；用户明确要求 img2txt，或模型不支持图片、图片读取失败、出现 Cannot read 报错时执行 SOP。'
+description: '图片 OCR、描述、分析。模型能直接看图且未指定 img2txt 直接处理；要求 img2txt，或不支持图片、Cannot read、Image input error 执行 SOP。'
 ---
 
 # 图像转文本（img2txt）
@@ -20,14 +20,14 @@ description: '图片 OCR、描述与分析。模型能直接看图且用户未�
 仅在以下情况执行 SOP：
 
 1. 用户明确要求使用 `img2txt`。
-2. 当前模型不支持图片输入（包括出现"模型不支持读取图片"、`Cannot read ...` 等图片读取报错）。
+2. 当前模型不支持图片输入（包括出现"模型不支持读取图片"、`Cannot read ...`、`Image input error: model cannot read ...` 等图片读取报错）。
 
 SOP 负责图片校验、格式转换、Provider 轮询和固定输出。所有进入 SOP 的图片都必须经过统一输入网关。
 
 ## 工作流
 
 1. Agent 使用自身能力取得图片，包括附件、路径、URL、Base64 或系统剪贴板。读取剪贴板只是输入获取，不是 SOP 触发条件。
-2. 平台或系统输出的 `Cannot read "...路径..." (this model does not support image input)` 错误本身就是图片输入提示，不是普通报错：该路径图片属于本回合输入，必须与其他输入一并纳入识别，不得跳过或仅告知用户"模型不支持图片"。错误给出完整路径时直接用该路径；没有路径时执行剪贴板回退。
+2. 平台或系统输出的图片读取报错（`Cannot read "...路径..." (this model does not support image input)`、`Image input error: model cannot read image.png` 等）本身就是图片输入提示，不是普通报错：该图片属于本回合输入，必须与其他输入一并纳入识别，不得跳过或仅告知用户"模型不支持图片"。报错给出完整路径时直接用该路径；只有文件名（如剪贴板粘贴的 image.png）或没有路径时执行剪贴板回退。
 3. 当前模型支持图片输入且用户未指定 `img2txt`：由 Agent 原生处理。
 4. 用户指定 `img2txt` 或当前模型不支持图片输入：把已取得的图片路径或数据交给 SOP。
 5. 没有可读图片时，自动读取当前系统剪贴板一次（Agent 无法直接读取时使用 SOP 的 `clipboard` 输入），并告知用户本次图片来自剪贴板；剪贴板中没有图片时，请用户重新上传或提供路径。
