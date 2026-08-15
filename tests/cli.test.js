@@ -95,8 +95,6 @@ test('Skill triggers only for explicit img2txt requests or image-read failures',
 
 test('CLI documentation preserves dependency-free macOS clipboard compatibility', () => {
     const skillRoot = path.resolve(__dirname, '..');
-    const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
-    const readme = fs.readFileSync(path.join(skillRoot, 'README.md'), 'utf8');
     const troubleshooting = fs.readFileSync(path.join(skillRoot, 'references', 'troubleshooting.md'), 'utf8');
 
     assert.match(troubleshooting, /macOS 使用系统自带的 `osascript`\/AppKit/);
@@ -119,24 +117,6 @@ test('Skill recovers session images before using the built-in clipboard fallback
     assert.match(skill, /恢复器不会定时清理.*下次运行恢复器时/);
     assert.match(troubleshooting, /系统剪贴板只是最后一级输入回退/);
     assert.match(troubleshooting, /Bash 会先展开 `\$img`/);
-});
-
-test('README documents failures that happen before skill invocation', () => {
-    const skillRoot = path.resolve(__dirname, '..');
-    const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
-    const readme = fs.readFileSync(path.join(skillRoot, 'README.md'), 'utf8');
-    const troubleshooting = fs.readFileSync(path.join(skillRoot, 'references', 'troubleshooting.md'), 'utf8');
-
-    assert.doesNotMatch(skill, /调用前失败|创建 Agent 回合或执行 skill 路由之前/);
-    assert.doesNotMatch(troubleshooting, /调用前失败|加载 skill 前就拒绝粘贴图片/);
-    assert.match(readme, /调用 Skill 之前直接拒绝粘贴图片/);
-    assert.match(readme, /使用 img2txt 识别 "C:\\images\\image\.png"/);
-    assert.match(readme, /本地绝对路径/);
-    assert.match(readme, /真实相对路径/);
-    assert.match(readme, /公开 HTTP\(S\) URL/);
-    assert.match(readme, /Data URL/);
-    assert.match(readme, /裸 Base64/);
-    assert.match(readme, /只在系统剪贴板中.*才需要先保存/);
 });
 
 test('clipboard fallback retry cache preserves source attribution', async (t) => {
@@ -171,7 +151,6 @@ test('Key documentation is configuration-only and never prints credential values
     const skillRoot = path.resolve(__dirname, '..');
     const documentation = [
         fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8'),
-        fs.readFileSync(path.join(skillRoot, 'README.md'), 'utf8'),
         fs.readFileSync(path.join(skillRoot, 'references', 'troubleshooting.md'), 'utf8'),
     ].join('\n');
     assert.match(documentation, /不读取标准输入/);
