@@ -2,14 +2,12 @@
 
 `img2txt` 是一个面向智能体的图像理解 Skill，可集成到 Claude Code、Codex、OpenCode 、Reasonix 等任何能执行 Node 脚本的智能体。  
 
-Skill 采用 Agent 优先的双路径：当前模型支持图片输入且用户未点名 `img2txt` 时，由 Agent 原生处理；只有用户显式要求 `img2txt` 或当前模型不支持图片输入时，才进入 img2txt SOP。
-
 能力：
 
 - 提取图片中的可见文字（OCR）
 - 描述和分析图片、截图、界面、图表、流程图及错误信息
 - Agent 可从附件、路径、URL、Base64 或系统剪贴板取得图片
-- Agent 原生结果标注 `[识别方式: Agent 原生视觉]`；SOP 结果标注实际 `[识别模型: provider/model]`
+
 
 ## ⚙️ 执行边界
 
@@ -40,28 +38,6 @@ img2txt SOP 需要：
 
 Gemini：https://aistudio.google.com/apikey
 
-### PowerShell
-
-```powershell
-# 设置 apikey
-[Environment]::SetEnvironmentVariable('ZHIPU_API_KEY', 'YOUR_ZHIPU_API_KEY', 'User')
-[Environment]::SetEnvironmentVariable('GEMINI_API_KEY', 'YOUR_GEMINI_API_KEY', 'User')
-
-# 验证是否已配置，不输出 Key
-@('ZHIPU_API_KEY', 'GEMINI_API_KEY') | ForEach-Object {
-  $configured = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_, 'User'))
-  "$_=" + $(if ($configured) { 'SET' } else { 'NOT_SET' })
-}
-
-# 更新 apikey
-[Environment]::SetEnvironmentVariable('ZHIPU_API_KEY', 'YOUR_NEW_ZHIPU_API_KEY', 'User')
-[Environment]::SetEnvironmentVariable('GEMINI_API_KEY', 'YOUR_NEW_GEMINI_API_KEY', 'User')
-
-# 删除 apikey
-[Environment]::SetEnvironmentVariable('ZHIPU_API_KEY', $null, 'User')
-[Environment]::SetEnvironmentVariable('GEMINI_API_KEY', $null, 'User')
-```
-
 ### CMD
 
 ```cmd
@@ -91,12 +67,30 @@ npm run doctor
 ### macOS Bash/zsh
 
 ```bash
+# 设置 apikey
 export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
 export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+
+# 验证是否已配置，不输出 Key
+[ -n "$ZHIPU_API_KEY" ] && echo ZHIPU_API_KEY=SET || echo ZHIPU_API_KEY=NOT_SET
+[ -n "$GEMINI_API_KEY" ] && echo GEMINI_API_KEY=SET || echo GEMINI_API_KEY=NOT_SET
+
+# 更新 apikey
+export ZHIPU_API_KEY='YOUR_NEW_ZHIPU_API_KEY'
+export GEMINI_API_KEY='YOUR_NEW_GEMINI_API_KEY'
+
+# 删除 apikey
+unset ZHIPU_API_KEY
+unset GEMINI_API_KEY
+```
+
+`export` 只对当前 shell 生效，Agent 进程必须继承这些环境变量。永久生效时把两行 `export` 写入 `~/.zshrc`（zsh）或 `~/.bash_profile`（bash），再 `source` 或在同一 shell 中启动 Agent。配置后运行：
+
+```bash
 npm run doctor
 ```
 
-macOS 的 Agent 进程必须继承这些环境变量；脚本不会从聊天、标准输入或命令参数接收 Key。
+脚本不会从聊天、标准输入或命令参数接收 Key。
 
 ## 🤖 SOP 支持的模型
 
