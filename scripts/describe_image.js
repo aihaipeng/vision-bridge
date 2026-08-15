@@ -12,8 +12,10 @@ const gemini = require('./providers/gemini');
 const zhipu = require('./providers/zhipu');
 
 const RETRY_CACHE_PREFIX = 'img2txt_retry_';
+const CLIPBOARD_FALLBACK_CACHE_PREFIX = `${RETRY_CACHE_PREFIX}clipboard_fallback_`;
 const RETRY_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PROMPT = '请详细描述这张图片的内容';
+const CLIPBOARD_FALLBACK_INPUT = 'clipboard-fallback';
 const PROVIDER_ORDER = ['zhipu', 'gemini'];
 const PROVIDER_REGISTRATION_URLS = {
   zhipu: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys',
@@ -51,8 +53,9 @@ function extensionForMime(mime) {
   }[mime] || '.img';
 }
 
-function createRetryCache(image) {
-  const filePath = path.join(os.tmpdir(), `${RETRY_CACHE_PREFIX}${Date.now()}_${process.pid}${extensionForMime(image.mime)}`);
+function createRetryCache(image, options = {}) {
+  const prefix = options.clipboardFallback ? CLIPBOARD_FALLBACK_CACHE_PREFIX : RETRY_CACHE_PREFIX;
+  const filePath = path.join(os.tmpdir(), `${prefix}${Date.now()}_${process.pid}${extensionForMime(image.mime)}`);
   fs.writeFileSync(filePath, image.data);
   return filePath;
 }
@@ -104,6 +107,22 @@ function providerOrder() {
   return [...PROVIDER_ORDER];
 }
 
+function parseCliImageInput(value) {
+  const clipboardFallbackRead = value === CLIPBOARD_FALLBACK_INPUT;
+  const resolverInput = clipboardFallbackRead ? 'clipboard' : value;
+  return {
+    resolverInput,
+    clipboardFallback: clipboardFallbackRead,
+    clipboardFallbackRead,
+    clipboard: resolverInput === 'clipboard',
+  };
+}
+
+function isClipboardFallbackRetryCache(filePath) {
+  return Boolean(filePath)
+    && path.basename(filePath).startsWith(CLIPBOARD_FALLBACK_CACHE_PREFIX);
+}
+
 function summarizeFailures(failures) {
   return failures.map(({ provider, error, missing }) => {
     if (missing) return `${provider}: 缺少 ${PROVIDER_KEYS[provider]}`;
@@ -133,6 +152,9 @@ function firstTarget(provider, geminiModels, zhipuModels) {
 }
 
 function formatStatusEvent(event) {
+  if (event.type === 'clipboard_fallback') {
+    return '[WARN] CLIPBOARD_FALLBACK: 当前消息包含图片附件但没有可读取的真实路径，正在读取当前 Windows 剪贴板';
+  }
   if (event.type === 'provider_available') {
     return `[INFO] PROVIDER_AVAILABLE: ${event.provider} 已配置，模型 ${event.models.join(', ')}`;
   }
@@ -154,11 +176,36 @@ function formatStatusEvent(event) {
   return `[WARN] MODEL_FAILED: ${event.provider}/${event.model} 失败（${reason}），没有更多可用模型`;
 }
 
-function formatSuccessfulOutput(result) {
+function formatSuccessfulOutput(result, options = {}) {
   const text = String(result.text || '')
     .replace(/<\|(?:begin|end)_of_box\|>/g, '')
     .trim();
-  return `${text}\n\n[识别模型: ${result.provider}/${result.model}]`;
+  const source = options.clipboardFallback
+    ? '\n\n[图片来源: Windows 剪贴板（附件路径缺失回退）]'
+    : '';
+  return `${text}${source}\n\n[识别模型: ${result.provider}/${result.model}]`;
+}
+
+function imageInputCliError(error, inputMode) {
+  const message = error && (error.message || error);
+  const exitCode = error instanceof ImageStandardizationError ? error.code : 1;
+  if (!inputMode.clipboardFallbackRead) {
+    return new CliError('IMAGE_INPUT', message || String(error), exitCode, error);
+  }
+  return new CliError(
+    'IMAGE_INPUT',
+    `附件路径缺失后已尝试读取当前 Windows 剪贴板，但没有取得可用图片（${singleLine(message)}）。Agent 下一步：请用户重新上传图片或提供绝对路径；不要搜索工作目录或重复读取剪贴板`,
+    exitCode,
+    error,
+  );
+}
+
+async function standardizeCliImageInput(inputMode, standardizeImpl = standardizeImageInput) {
+  try {
+    return await standardizeImpl(inputMode.resolverInput);
+  } catch (error) {
+    throw imageInputCliError(error, inputMode);
+  }
 }
 
 function modelFailures(failures) {
@@ -259,11 +306,15 @@ async function describeWithProviders(options) {
 
 async function main() {
   if (process.argv.length < 3) {
-    throw new CliError('USAGE', '用法: node img2txt/scripts/describe_image.js <图片输入|clipboard> [问题]');
+    throw new CliError('USAGE', '用法: node img2txt/scripts/describe_image.js <图片输入|clipboard|clipboard-fallback> [问题]');
   }
   cleanupRetryCaches();
-  const imageInput = process.argv[2];
+  const inputMode = parseCliImageInput(process.argv[2]);
+  const imageInput = inputMode.resolverInput;
   const prompt = process.argv[3] || DEFAULT_PROMPT;
+  if (inputMode.clipboardFallbackRead) {
+    process.stderr.write(`${formatStatusEvent({ type: 'clipboard_fallback' })}\n`);
+  }
   const geminiModels = parseGeminiModels(process.env.GEMINI_MODELS);
   const zhipuModels = parseZhipuModels();
   const credentials = {
@@ -272,31 +323,21 @@ async function main() {
   };
 
   let retryPath = existingRetryCache(imageInput);
+  if (retryPath && isClipboardFallbackRetryCache(retryPath)) {
+    inputMode.clipboardFallback = true;
+  }
   if (!credentials.gemini.key && !credentials.zhipu.key) {
-    if (imageInput === 'clipboard') {
-      try {
-        const clipboardImage = await standardizeImageInput(imageInput);
-        retryPath = createRetryCache(clipboardImage);
-      } catch (error) {
-        if (error instanceof ImageStandardizationError) throw new CliError('IMAGE_INPUT', error.message, error.code, error);
-        throw error;
-      }
+    if (inputMode.clipboard) {
+      const clipboardImage = await standardizeCliImageInput(inputMode);
+      retryPath = createRetryCache(clipboardImage, inputMode);
     }
     const error = keyRequiredError(providerOrder());
     throw new CliError(error.code, `${error.message}${retryHint(retryPath)}`, error.exitCode, error);
   }
 
-  let standardized;
-  try {
-    standardized = await standardizeImageInput(imageInput);
-  } catch (error) {
-    if (error instanceof ImageStandardizationError) {
-      throw new CliError('IMAGE_INPUT', error.message, error.code, error);
-    }
-    throw new CliError('IMAGE_INPUT', error.message || String(error), 1, error);
-  }
+  const standardized = await standardizeCliImageInput(inputMode);
 
-  if (imageInput === 'clipboard') retryPath = createRetryCache(standardized);
+  if (inputMode.clipboard) retryPath = createRetryCache(standardized, inputMode);
 
   let result;
   try {
@@ -314,7 +355,7 @@ async function main() {
     throw new CliError('PROVIDERS_FAILED', `${error.message || error}${hint}`, 1, error);
   }
 
-  process.stdout.write(`${formatSuccessfulOutput(result)}\n`);
+  process.stdout.write(`${formatSuccessfulOutput(result, inputMode)}\n`);
   if (retryPath && fs.existsSync(retryPath)) fs.rmSync(retryPath, { force: true });
   return result;
 }
@@ -332,6 +373,7 @@ if (require.main === module) main().catch(handleFatalError);
 module.exports = {
   DEFAULT_MODEL: zhipu.DEFAULT_MODEL,
   DEFAULT_PROMPT,
+  CLIPBOARD_FALLBACK_INPUT,
   ZHIPU_MAX_IMAGE_BYTES: zhipu.IMAGE_PROFILE.maxBytes,
   ZHIPU_MAX_IMAGE_DIMENSION: zhipu.IMAGE_PROFILE.maxDimension,
   RETRY_CACHE_MAX_AGE_MS,
@@ -342,11 +384,15 @@ module.exports = {
   formatSuccessfulOutput,
   handleFatalError,
   imageToBase64,
+  imageInputCliError,
+  isClipboardFallbackRetryCache,
   main,
   parseGeminiModels,
+  parseCliImageInput,
   parseZhipuModels,
   keyGuidance,
   keyRequiredError,
   prepareForZhipu,
   providerOrder,
+  standardizeCliImageInput,
 };

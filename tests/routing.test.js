@@ -3,14 +3,20 @@ const test = require('node:test');
 const gemini = require('../scripts/providers/gemini');
 const zhipu = require('../scripts/providers/zhipu');
 const { CliError, ProviderError } = require('../scripts/errors');
+const { ImageStandardizationError } = require('../scripts/image_input_resolver');
 const {
+    CLIPBOARD_FALLBACK_INPUT,
     DEFAULT_MODEL,
     describeWithProviders,
     formatStatusEvent,
     formatSuccessfulOutput,
     imageToBase64,
+    imageInputCliError,
+    isClipboardFallbackRetryCache,
     keyGuidance,
+    parseCliImageInput,
     providerOrder,
+    standardizeCliImageInput,
 } = require('../scripts/describe_image');
 const { createPngBytes } = require('./helpers');
 
@@ -19,6 +25,68 @@ test('always routes GLM before Gemini regardless of user wording', () => {
     for (const prompt of ['分析图片', '只用 Gemini', '不要使用 GLM', '使用 gemini-3.6-flash']) {
         assert.deepEqual(providerOrder(prompt), ['zhipu', 'gemini']);
     }
+});
+
+test('clipboard fallback is explicit, observable, and attributed in successful output', () => {
+    const mode = parseCliImageInput(CLIPBOARD_FALLBACK_INPUT);
+    assert.deepEqual(mode, {
+        resolverInput: 'clipboard',
+        clipboardFallback: true,
+        clipboardFallbackRead: true,
+        clipboard: true,
+    });
+    assert.deepEqual(parseCliImageInput('clipboard'), {
+        resolverInput: 'clipboard',
+        clipboardFallback: false,
+        clipboardFallbackRead: false,
+        clipboard: true,
+    });
+    assert.deepEqual(parseCliImageInput('image.png'), {
+        resolverInput: 'image.png',
+        clipboardFallback: false,
+        clipboardFallbackRead: false,
+        clipboard: false,
+    });
+    assert.match(formatStatusEvent({ type: 'clipboard_fallback' }), /^\[WARN\] CLIPBOARD_FALLBACK:/);
+
+    const result = { text: '识别成功', provider: 'zhipu', model: 'glm-one' };
+    assert.equal(
+        formatSuccessfulOutput(result, mode),
+        '识别成功\n\n[图片来源: Windows 剪贴板（附件路径缺失回退）]\n\n[识别模型: zhipu/glm-one]',
+    );
+    assert.equal(isClipboardFallbackRetryCache('img2txt_retry_clipboard_fallback_123.png'), true);
+    assert.equal(isClipboardFallbackRetryCache('img2txt_retry_123.png'), false);
+});
+
+test('clipboard fallback reads once and gives the Agent one safe recovery path', async () => {
+    const mode = parseCliImageInput(CLIPBOARD_FALLBACK_INPUT);
+    let successCalls = 0;
+    const image = await standardizeCliImageInput(mode, async (input) => {
+        successCalls += 1;
+        assert.equal(input, 'clipboard');
+        return { data: Buffer.from('image'), mime: 'image/png', source: 'clipboard' };
+    });
+    assert.equal(successCalls, 1);
+    assert.equal(image.source, 'clipboard');
+
+    let failureCalls = 0;
+    let error;
+    await assert.rejects(
+        () => standardizeCliImageInput(mode, async () => {
+            failureCalls += 1;
+            throw new ImageStandardizationError('错误: 剪贴板中没有图片');
+        }),
+        (caught) => {
+            error = caught;
+            return true;
+        },
+    );
+    assert.equal(failureCalls, 1);
+    assert.ok(error instanceof CliError);
+    assert.equal(error.code, 'IMAGE_INPUT');
+    assert.match(error.message, /已尝试读取当前 Windows 剪贴板/);
+    assert.match(error.message, /重新上传图片或提供绝对路径/);
+    assert.match(error.message, /不要搜索工作目录或重复读取剪贴板/);
 });
 
 test('falls back across Providers and skips missing credentials', async () => {
