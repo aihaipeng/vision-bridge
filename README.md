@@ -87,31 +87,6 @@ reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 | Gemini   | `gemini-3.5-flash`        | 固定版本的 Gemini Flash 多模态模型，提供更深一层的版本回退。             | Gemini 后备 2  |
 | Gemini   | `gemini-flash-latest`     | 指向当前最新 Gemini Flash 的浮动别名，实际版本可能随 Google 更新而变化。 | Gemini 后备 3 |
 
-## 🔀 模型调用顺序
-
-### 默认顺序
-
-`VISION_PROVIDER=auto` 或未设置时，按上表顺序调用：先 GLM 模型池，全部失败后回退 Gemini 模型池。只配置一个 Provider 的 Key 时，自动跳过没有 Key 的 Provider。
-
-### 用户指定模型或 Provider
-
-用户问题中的明确模型意图优先于 `VISION_PROVIDER`：
-
-| 用户表达                           | 首选顺序                                   |
-| ---------------------------------- | ------------------------------------------ |
-| 未指定模型，或要求使用 GLM/智谱    | GLM 4.1V -> GLM 4.6V -> Gemini 模型池      |
-| 指定`glm-4.6v-flash`             | GLM 4.6V -> GLM 4.1V -> Gemini 模型池      |
-| 要求使用 Gemini、Google 或谷歌模型 | Gemini 模型池 -> GLM 4.1V -> GLM 4.6V      |
-| 指定某个`gemini-*` 模型          | 指定模型 -> 其他 Gemini 模型 -> GLM 模型池 |
-
-### 失败、重试与回退
-
-- 认证失败不在当前 Provider 内重试；如果另一个 Provider 有可用 Key，则继续尝试另一个 Provider。
-- 网络错误、HTTP 5xx 和普通 Provider 级 429 最多请求 3 次，重试间隔为 2 秒、4 秒。
-- Gemini 模型级 429 不等待当前模型恢复，立即尝试下一个 Gemini 模型。
-- Gemini Provider 级 429 如果给出明确恢复时间，立即切换备用 Provider。
-- 智谱请求返回 HTTP 400 时，不继续尝试其他智谱模型，直接进入 Gemini 回退链路。
-- 所有可用 Provider 都失败后，脚本返回 `PROVIDERS_FAILED`；缺少 Key 或认证失败时返回 `KEY_REQUIRED`。
 
 ## 📥 支持的图片输入
 
@@ -156,27 +131,6 @@ reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 | Gemini Provider    | 原始图片数据小于 14,000,000 字节          | 为 20 MB 内联请求的 Base64、JSON 和提示文本预留空间 |
 
 Provider 最终只会收到 `image/jpeg` 或 `image/png`。最低压缩档仍无法满足限制时，请求会在上传前失败。
-
-## 🛠️ 配置项
-
-| 环境变量                         | 默认值             | 说明                                                              |
-| -------------------------------- | ------------------ | ----------------------------------------------------------------- |
-| `ZHIPU_API_KEY`                | 无                 | 智谱 API Key                                                      |
-| `GEMINI_API_KEY`               | 无                 | Gemini API Key                                                    |
-| `VISION_PROVIDER`              | `auto`           | 可设为`auto`、`zhipu` 或 `gemini`，只调整 Provider 首选顺序 |
-| `ZHIPU_MODELS`                 | 内置 GLM 模型池    | 逗号分隔的智谱模型调用顺序                                        |
-| `GEMINI_MODELS`                | 内置 Gemini 模型池 | 逗号分隔的 Gemini 模型调用顺序                                    |
-| `ZHIPU_MODEL`                  | 无                 | 兼容旧版单模型配置；仅在未设置`ZHIPU_MODELS` 时生效             |
-| `VISION_MODEL`                 | 无                 | 更早的兼容配置，仅作为`ZHIPU_MODEL` 的后备值                    |
-| `VISION_API_TIMEOUT_MS`        | `30000`          | 单次 Provider 请求超时，单位为毫秒                                |
-| `HTTPS_PROXY` / `HTTP_PROXY` | 无                 | Provider 请求代理                                                 |
-| `NO_PROXY`                     | 无                 | 不经过代理的主机列表                                              |
-
-例如，将 Gemini 设为首选 Provider：
-
-```powershell
-$env:VISION_PROVIDER = 'gemini'
-```
 
 ## 🔒 安全与隐私
 
