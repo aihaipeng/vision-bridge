@@ -27,7 +27,7 @@
 
 ### 前提条件
 
-- Windows 10/11，或带系统 `osascript`/AppKit 的 macOS。
+- Windows 10/11, macOS。
 - Node.js 20.9 或更高版本及 npm。
 - Git，用于从仓库安装或更新 Skill。
 - 可访问智谱或 Gemini API 的出站 HTTPS 网络。
@@ -35,7 +35,7 @@
 
 ### 安装步骤
 
-将仓库克隆到当前客户端或项目配置的 Skill 目录。不同客户端的目录规则不同，请把示例中的路径替换为实际的 `<skills-dir>`，不要假设固定的全局安装目录。
+将仓库克隆到当前客户端或项目配置的 Skill 目录。不同客户端的目录规则不同，请把示例中的路径替换为实际的 `<skills-dir>`。
 
 Windows CMD：
 
@@ -97,7 +97,14 @@ export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
 npm run doctor
 ```
 
-`img2txt` 不读取标准输入，不接受聊天中的单次 Key，也不自动持久化凭据。禁止在提示词、日志、截图或问题报告中回显 API Key。
+### 调用案例
+Agent框架以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, 模型使用 deepseek-v4-pro
+<img width="2558" height="1387" alt="image" src="https://github.com/user-attachments/assets/508bd7d7-24df-4856-aac4-cc6c5365def0" />
+
+其中ZCode直接传入图片并发送后会报错，此时需要指定图片路径并显式调用 img2txt skill。
+<img width="1198" height="798" alt="image" src="https://github.com/user-attachments/assets/748ea696-a2e0-45b3-a3bd-01ea5d962cd8" />
+<img width="1198" height="1094" alt="image" src="https://github.com/user-attachments/assets/b8402be6-99c0-4a84-b61f-b0e07a132765" />
+
 
 ## 3. 目录结构说明 (Directory Structure)
 
