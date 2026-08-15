@@ -62,15 +62,15 @@ setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
 
 `clipboard` 优先读取 Windows 剪贴板位图，没有位图时回退到文件列表中的第一个图片文件。
 
-用户在当前请求中明确说明图片位于剪贴板时，调用 `clipboard`。另有一个严格受限的自动例外：当前消息确有平台图片附件，但平台没有提供可读取的真实路径时，立即调用 `clipboard-fallback`，不要先询问用户是否处理。脚本会在读取前输出 `CLIPBOARD_FALLBACK`，成功后在 stdout 标注剪贴板来源。
+用户在当前请求中明确说明图片位于剪贴板时，调用 `clipboard`。两类当前回合信号触发受控自动回退：平台图片附件没有可读取的真实路径；当前 Agent、图片加载器或系统刚产生 `Cannot read '<name>' (this model does not support image input)`、`Unsupported Image` 等图片能力错误。立即调用 `clipboard-fallback`，不要解释模型限制或询问用户是否处理。脚本会在读取前输出 `CLIPBOARD_FALLBACK`，成功后在 stdout 标注剪贴板来源。
 
-以下情况不授权自动读取剪贴板：过去消息中的图片、纯文本中的 `image.png`、用户转述或粘贴的 Unsupported Image 错误、普通路径不存在、已有文件无法解码。无法确认当前消息确有图片附件时，不要使用 `clipboard-fallback`。
+以下情况不授权自动读取剪贴板：过去消息中的图片、用户在普通文字中引用或讨论 `Cannot read`/`Unsupported Image` 错误、普通路径不存在、已有文件无法解码。必须区分“本回合由 Agent/平台刚产生的错误”和“用户提供的错误文本”。
 
 如果当前图片附件只有显示名而没有可读取的真实路径：
 
 1. 不要把显示名当路径，也不要检查或搜索工作目录。
 2. 立即使用 `clipboard-fallback` 读取当前 Windows 剪贴板一次。
-3. 成功时保留 stdout 中的 `[图片来源: Windows 剪贴板（附件路径缺失回退）]`；失败时按错误中的 `Agent 下一步` 请用户重新上传或提供绝对路径。
+3. 成功时保留 stdout 中的 `[图片来源: Windows 剪贴板（图片直读失败回退）]`；失败时按错误中的 `Agent 下一步` 请用户重新上传或提供绝对路径。
 
 在 OpenCode 或 Claude Code 中粘贴到聊天的图片不一定仍保留在 Windows 剪贴板中。如果 `clipboard-fallback` 返回 `IMAGE_INPUT`：
 

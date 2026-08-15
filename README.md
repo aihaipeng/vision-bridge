@@ -114,7 +114,7 @@ npm run doctor
 | SVG 文本           | `<svg ...>...</svg>`            | 渲染为 PNG 后发送                  |
 | 聊天附件路径       | Agent 提供的真实绝对路径          | 仅显示名不等于可读取路径           |
 | Windows 剪贴板     | `clipboard`                     | 仅在用户明确要求时读取             |
-| 附件路径缺失回退   | `clipboard-fallback`            | 仅供 Agent 在当前消息确有图片附件但无真实路径时使用 |
+| 图片直读失败回退   | `clipboard-fallback`            | 当前附件无路径或本回合平台/模型报告不支持图片输入时使用 |
 
 ## 🖼️ 支持的图片格式
 
@@ -151,7 +151,7 @@ Provider 最终只会收到 `image/jpeg` 或 `image/png`。低熵截图优先保
 
 - 图片和问题文本会上传到参与轮询的智谱或 Google 云端 Provider；失败切换时可能先后发送给两个 Provider，请仅处理已获授权的内容。
 - 不要使用本 Skill 处理未经授权的身份证、合同、凭证或其他敏感资料。
-- 只有用户明确要求，或当前消息确有图片附件但平台没有提供可读取路径时，Skill 才读取剪贴板。受控回退使用 `clipboard-fallback`，读取前向主 Agent 输出 `CLIPBOARD_FALLBACK`，成功结果注明剪贴板来源。
+- 只有用户明确要求、当前图片附件没有可读取路径，或本回合 Agent/系统刚产生 `Cannot read ... this model does not support image input`、`Unsupported Image` 等图片能力错误时，Skill 才读取剪贴板。受控回退使用 `clipboard-fallback`，读取前向主 Agent 输出 `CLIPBOARD_FALLBACK`，成功结果注明剪贴板来源。
 - 普通缺失路径、过去消息、纯文本中的 `image.png` 和无法解码的已有文件不会触发剪贴板回退；回退失败后不会搜索工作目录或重复读取。
 - 远程 URL 会拒绝私网、回环、链路本地、UNC 网络共享和含用户名密码的地址，以降低 SSRF 风险。
 - API Key 不会写入请求 URL 或正常输出；Gemini 使用 `x-goog-api-key` 请求头，智谱使用 Bearer 认证头。

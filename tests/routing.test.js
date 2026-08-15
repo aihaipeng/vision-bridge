@@ -52,7 +52,7 @@ test('clipboard fallback is explicit, observable, and attributed in successful o
     const result = { text: '识别成功', provider: 'zhipu', model: 'glm-one' };
     assert.equal(
         formatSuccessfulOutput(result, mode),
-        '识别成功\n\n[图片来源: Windows 剪贴板（附件路径缺失回退）]\n\n[识别模型: zhipu/glm-one]',
+        '识别成功\n\n[图片来源: Windows 剪贴板（图片直读失败回退）]\n\n[识别模型: zhipu/glm-one]',
     );
     assert.equal(isClipboardFallbackRetryCache('img2txt_retry_clipboard_fallback_123.png'), true);
     assert.equal(isClipboardFallbackRetryCache('img2txt_retry_123.png'), false);

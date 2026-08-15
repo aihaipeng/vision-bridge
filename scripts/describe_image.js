@@ -153,7 +153,7 @@ function firstTarget(provider, geminiModels, zhipuModels) {
 
 function formatStatusEvent(event) {
   if (event.type === 'clipboard_fallback') {
-    return '[WARN] CLIPBOARD_FALLBACK: 当前消息包含图片附件但没有可读取的真实路径，正在读取当前 Windows 剪贴板';
+    return '[WARN] CLIPBOARD_FALLBACK: 当前回合图片无法直接读取（模型不支持图片输入或附件路径缺失），正在读取当前 Windows 剪贴板';
   }
   if (event.type === 'provider_available') {
     return `[INFO] PROVIDER_AVAILABLE: ${event.provider} 已配置，模型 ${event.models.join(', ')}`;
@@ -181,7 +181,7 @@ function formatSuccessfulOutput(result, options = {}) {
     .replace(/<\|(?:begin|end)_of_box\|>/g, '')
     .trim();
   const source = options.clipboardFallback
-    ? '\n\n[图片来源: Windows 剪贴板（附件路径缺失回退）]'
+    ? '\n\n[图片来源: Windows 剪贴板（图片直读失败回退）]'
     : '';
   return `${text}${source}\n\n[识别模型: ${result.provider}/${result.model}]`;
 }
@@ -194,7 +194,7 @@ function imageInputCliError(error, inputMode) {
   }
   return new CliError(
     'IMAGE_INPUT',
-    `附件路径缺失后已尝试读取当前 Windows 剪贴板，但没有取得可用图片（${singleLine(message)}）。Agent 下一步：请用户重新上传图片或提供绝对路径；不要搜索工作目录或重复读取剪贴板`,
+    `图片直读失败后已尝试读取当前 Windows 剪贴板，但没有取得可用图片（${singleLine(message)}）。Agent 下一步：请用户重新上传图片或提供绝对路径；不要搜索工作目录或重复读取剪贴板`,
     exitCode,
     error,
   );
