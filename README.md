@@ -1,6 +1,7 @@
 # 🖼️ img2txt
 
-`img2txt` 是一个面向智能体的图像理解 Skill。它统一读取本地文件、公开 URL、Data URL、Base64、一个或多个聊天附件真实路径和 Windows 剪贴板中的图片，经过解码、安全校验与格式标准化后，按固定模型池输出带模型归属的文字。
+`img2txt` 是一个面向智能体的图像理解 Skill，可集成到 Claude Code、Codex、OpenCode 、Reasonix 等任何能执行 Node 脚本的智能体。  
+读取本地文件、公开 URL、Data URL、Base64、一个或多个聊天附件真实路径和 Windows 剪贴板中的图片，经过解码、安全校验与格式标准化后，按固定模型池输出带模型归属的文字。
 
 适合以下任务：
 
