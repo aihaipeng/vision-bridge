@@ -21,18 +21,16 @@
 
 ## 🚀 快速开始
 
-至少配置一个 Provider 的 API Key；同时配置两个 Key 可以获得完整的跨 Provider 自动轮询能力。脚本先检查 Key，只轮询已配置的 Provider，顺序始终为 GLM 模型池 → Gemini 模型池。用户在问题中声明 Provider 或模型不会改变该顺序。
+至少配置一个 Provider 的 API Key。
 
 配置完成后，直接在对话中上传图片或提供图片来源，并说明任务。例如：
 
 - 上传图片后说：“请详细描述这张图片。”
 - 提供本地路径：“提取 `C:\images\receipt.png` 中的文字。”
 - 提供公开 URL：“分析 `https://example.com/chart.png` 中的数据趋势。”
-- 明确使用剪贴板：“读取剪贴板中的截图并解释报错。”
+- 使用剪贴板：“读取剪贴板中的截图并解释报错。”
 
 仅发送图片而不附带说明时，Skill 会自动详细描述图片。
-
-配置后在 Skill 目录运行 `npm run doctor`。它只显示 Key 是否已配置，不显示 Key 内容。不要在聊天中发送 API Key；脚本不读取标准输入，也不支持单次 Key。
 
 ## 🔑 申请并设置 API Key
 
@@ -90,16 +88,16 @@ npm run doctor
 
 ## 🤖 支持的模型
 
-模型按表格顺序自动轮询。单个模型失败后不会原地重试或等待；模型级故障切换下一模型，Provider 级故障直接切换下一 Provider。切换原因写入 stderr，最终 stdout 末尾注明实际使用模型。
+模型按表格顺序自动轮询。
 
-| Provider | 模型                        | 简要介绍                                                                 | 默认角色       |
-| -------- | --------------------------- | ------------------------------------------------------------------------ | -------------- |
-| GLM      | `glm-4.1v-thinking-flash` | 偏视觉思考与推理的 GLM 多模态模型，适合需要分析过程的图片理解任务。      | 默认模型       |
-| GLM      | `glm-4.6v-flash`          | GLM Flash 视觉模型，用于快速图像理解，并作为智谱模型池的第二顺位。       | 智谱后备       |
-| Gemini   | `gemini-3.7-flash`        | 固定版本的 Gemini Flash 多模态模型，支持`generateContent`。            | Gemini 首选    |
-| Gemini   | `gemini-3.6-flash`        | 固定版本的 Gemini Flash 多模态模型，用于 3.7 不可用时继续处理请求。      | Gemini 后备 1  |
-| Gemini   | `gemini-3.5-flash`        | 固定版本的 Gemini Flash 多模态模型，提供更深一层的版本回退。             | Gemini 后备 2  |
-| Gemini   | `gemini-flash-latest`     | 指向当前最新 Gemini Flash 的浮动别名，实际版本可能随 Google 更新而变化。 | Gemini 后备 3 |
+| Provider | 模型                        | 说明                                                                 | 
+| -------- | --------------------------- | ------------------------------------------------------------------------ |
+| GLM      | `glm-4.1v-thinking-flash` | 偏视觉思考与推理的 GLM 多模态模型，适合需要分析过程的图片理解任务。      | 
+| GLM      | `glm-4.6v-flash`          | GLM Flash 视觉模型，用于快速图像理解，并作为智谱模型池的第二顺位。       | 
+| Gemini   | `gemini-3.7-flash`        | 固定版本的 Gemini Flash 多模态模型。            | 
+| Gemini   | `gemini-3.6-flash`        | 固定版本的 Gemini Flash 多模态模型，用于 3.7 不可用时继续处理请求。      | 
+| Gemini   | `gemini-3.5-flash`        | 固定版本的 Gemini Flash 多模态模型，提供更深一层的版本回退。             | 
+| Gemini   | `gemini-flash-latest`     | 指向当前最新 Gemini Flash 的浮动别名，实际版本可能随 Google 更新而变化。 | 
 
 
 ## 📥 支持的图片输入
