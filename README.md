@@ -98,7 +98,7 @@ npm run doctor
 ```
 
 ### 调用案例
-Agent框架以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, 模型使用 deepseek-v4-pro
+Coding Agent 以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, 模型使用 deepseek-v4-pro
 <img width="2558" height="1387" alt="image" src="https://github.com/user-attachments/assets/508bd7d7-24df-4856-aac4-cc6c5365def0" />
 
 其中ZCode直接传入图片并发送后会报错，此时需要指定图片路径并显式调用 img2txt skill。
