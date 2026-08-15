@@ -1,6 +1,6 @@
 # 🖼️ img2txt
 
-`img2txt` 是一个面向智能体的图像理解 Skill，可集成到 Claude Code、Codex、OpenCode 、Reasonix 等任何能执行 Node 脚本的智能体。  
+`img2txt` 是一个面向智能体的图像理解 Skill，可集成到 Claude Code、Codex、OpenCode 、Reasonix 等智能体。  
 
 能力：
 
