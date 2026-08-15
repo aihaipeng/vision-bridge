@@ -48,7 +48,7 @@ test('standardizes local paths, extensionless files, file URLs, and SVG text', a
     assert.equal(image.mime, 'image/png');
 });
 
-test('reads the macOS clipboard through built-in AppKit with bitmap-first file fallback', async (t) => {
+test('reads the macOS clipboard through built-in AppKit with file-first bitmap fallback', async (t) => {
     const pngBytes = await createPngBytes();
     const tempDir = createTempDir(t);
     const calls = [];
@@ -72,13 +72,13 @@ test('reads the macOS clipboard through built-in AppKit with bitmap-first file f
     assert.deepEqual(calls[0].args.slice(0, 3), ['-l', 'JavaScript', '-e']);
     const script = calls[0].args[3];
     assert.match(script, /NSPasteboard\.generalPasteboard/);
-    assert.ok(script.indexOf('imageClasses.addObject($.NSImage)') < script.indexOf('urlClasses.addObject($.NSURL)'));
+    assert.ok(script.indexOf('urlClasses.addObject($.NSURL)') < script.indexOf('imageClasses.addObject($.NSImage)'));
     assert.match(script, /NSPasteboardURLReadingContentsConformToTypesKey/);
     assert.match(script, /NSPasteboardURLReadingFileURLsOnlyKey/);
     assert.equal(fs.existsSync(path.join(tempDir, 'vision_clip_4242.png')), false);
 });
 
-test('preserves Windows clipboard file fallback and rejects unsupported platforms', async (t) => {
+test('reads Windows clipboard file entries first and falls back to bitmap', async (t) => {
     const pngBytes = await createPngBytes();
     const tempDir = createTempDir(t);
     const imagePath = path.join(tempDir, 'copied-image.png');
@@ -92,14 +92,34 @@ test('preserves Windows clipboard file fallback and rejects unsupported platform
             spawnSyncImpl(command) {
                 commands.push(command);
                 return commands.length === 1
-                    ? { status: 1, stdout: '' }
-                    : { status: 0, stdout: `${imagePath}\r\n` };
+                    ? { status: 0, stdout: `${imagePath}\r\n` }
+                    : { status: 1, stdout: '' };
             },
         },
     });
 
     assert.equal(image.mime, 'image/png');
-    assert.deepEqual(commands, ['powershell', 'powershell']);
+    assert.deepEqual(commands, ['powershell']);
+
+    const bitmapCommands = [];
+    const bitmapImage = await standardizeImageInput('clipboard', {
+        clipboard: {
+            platform: 'win32',
+            tmpDir: tempDir,
+            pid: 4444,
+            spawnSyncImpl(command) {
+                bitmapCommands.push(command);
+                if (bitmapCommands.length === 1) return { status: 1, stdout: '' };
+                fs.writeFileSync(path.join(tempDir, 'vision_clip_4444.png'), pngBytes);
+                return { status: 0, stdout: '' };
+            },
+        },
+    });
+    assert.equal(bitmapImage.mime, 'image/png');
+    assert.ok(bitmapImage.data.equals(pngBytes));
+    assert.deepEqual(bitmapCommands, ['powershell', 'powershell']);
+    assert.equal(fs.existsSync(path.join(tempDir, 'vision_clip_4444.png')), false);
+
     assert.throws(
         () => clipboardImagePath({ platform: 'linux' }),
         (error) => error instanceof ImageStandardizationError && /Windows 和 macOS/.test(error.message),

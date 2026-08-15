@@ -32,13 +32,6 @@ function run(argv) {
   const destination = argv[0];
   const pasteboard = $.NSPasteboard.generalPasteboard;
 
-  const imageClasses = $.NSMutableArray.array;
-  imageClasses.addObject($.NSImage);
-  const images = pasteboard.readObjectsForClassesOptions(imageClasses, $());
-  if (images && images.count > 0 && writeImageAsPng(images.objectAtIndex(0), destination)) {
-    return 'bitmap';
-  }
-
   const fileOptions = $.NSMutableDictionary.dictionary;
   fileOptions.setObjectForKey($.NSImage.imageTypes, $('NSPasteboardURLReadingContentsConformToTypesKey'));
   fileOptions.setObjectForKey($.NSNumber.numberWithBool(true), $('NSPasteboardURLReadingFileURLsOnlyKey'));
@@ -48,6 +41,13 @@ function run(argv) {
   if (urls && urls.count > 0) {
     const image = $.NSImage.alloc.initWithContentsOfURL(urls.objectAtIndex(0));
     if (writeImageAsPng(image, destination)) return 'file';
+  }
+
+  const imageClasses = $.NSMutableArray.array;
+  imageClasses.addObject($.NSImage);
+  const images = pasteboard.readObjectsForClassesOptions(imageClasses, $());
+  if (images && images.count > 0 && writeImageAsPng(images.objectAtIndex(0), destination)) {
+    return 'bitmap';
   }
 
   throw new Error('clipboard does not contain an image');
@@ -111,14 +111,14 @@ function clipboardSystemName(platform = process.platform) {
 }
 
 function windowsClipboardImagePath({ spawnSyncImpl, existsSync, tmpDir, pid }) {
-  const tmp = path.join(tmpDir, `vision_clip_${pid}.png`);
-  const save = spawnSyncImpl('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $img = Get-Clipboard -Format Image } catch { $img = $null }; if ($img) { $img.Save('" + tmp.replace(/'/g, "''") + "') } else { exit 1 }"] , { stdio: 'ignore' });
-  if (save.status === 0 && existsSync(tmp)) return { filePath: tmp, isTemp: true };
   const files = spawnSyncImpl('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $f = Get-Clipboard -Format FileDropList } catch { $f = $null }; if ($f -and $f.Count -gt 0) { Write-Output $f[0].FullName } else { exit 1 }"], { encoding: 'utf8' });
   if (files.status === 0) {
     const filePath = (files.stdout || '').trim().split(/\r?\n/)[0];
     if (filePath && existsSync(filePath)) return { filePath, isTemp: false };
   }
+  const tmp = path.join(tmpDir, `vision_clip_${pid}.png`);
+  const save = spawnSyncImpl('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $img = Get-Clipboard -Format Image } catch { $img = $null }; if ($img) { $img.Save('" + tmp.replace(/'/g, "''") + "') } else { exit 1 }"] , { stdio: 'ignore' });
+  if (save.status === 0 && existsSync(tmp)) return { filePath: tmp, isTemp: true };
   raiseImageError('错误: 剪贴板中没有图片。请重新用截图工具或右键复制图片，或先把图片保存成文件再提供路径');
 }
 
