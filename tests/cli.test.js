@@ -82,8 +82,9 @@ test('Skill uses native Agent vision by default and enters the SOP only at the c
 
     assert.equal(DEFAULT_PROMPT, '请详细描述这张图片的内容');
     assert.ok(description.length < 100, `description should stay concise, got ${description.length} characters`);
-    assert.match(description, /当前模型支持图片输入时由 Agent 直接处理/);
-    assert.match(description, /用户明确要求 img2txt 或当前模型不支持图片输入时执行 img2txt SOP/);
+    assert.match(description, /模型能直接看图且用户未指定 img2txt 时直接处理/);
+    assert.match(description, /用户明确要求 img2txt/);
+    assert.match(description, /模型不支持图片、图片读取失败、出现 Cannot read 报错时执行 SOP/);
     assert.doesNotMatch(description, /剪贴板|clipboard|Provider|API Key/);
     assert.match(skill, /不运行 doctor、不调用 SOP、不要求 Provider Key/);
     assert.match(skill, /首次执行 SOP 或 SOP 失败后才运行 `npm run doctor`/);

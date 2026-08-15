@@ -1,6 +1,6 @@
 ---
 name: img2txt
-description: '用于图片 OCR、描述和分析。当前模型支持图片输入时由 Agent 直接处理；仅当用户明确要求 img2txt 或当前模型不支持图片输入时执行 img2txt SOP。'
+description: '图片 OCR、描述与分析。模型能直接看图且用户未指定 img2txt 时直接处理；用户明确要求 img2txt，或模型不支持图片、图片读取失败、出现 Cannot read 报错时执行 SOP。'
 ---
 
 # 图像转文本（img2txt）
@@ -20,7 +20,7 @@ description: '用于图片 OCR、描述和分析。当前模型支持图片输�
 仅在以下情况执行 SOP：
 
 1. 用户明确要求使用 `img2txt`。
-2. 当前模型不支持图片输入。
+2. 当前模型不支持图片输入（包括出现"模型不支持读取图片"、`Cannot read ...` 等图片读取报错）。
 
 SOP 负责图片校验、格式转换、Provider 轮询和固定输出。所有进入 SOP 的图片都必须经过统一输入网关。
 
