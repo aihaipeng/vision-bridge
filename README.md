@@ -6,7 +6,7 @@
 
 - 提取图片中的可见文字（OCR）
 - 描述和分析图片、截图、界面、图表、流程图及错误信息
-- 从附件、路径、URL、Base64 或系统剪贴板取得图片并进行分析
+- 从附件、路径、URL、Base64、Claude Code/OpenCode 会话或系统剪贴板取得图片并进行分析
 
 
 ## ⚙️ 执行边界
@@ -117,6 +117,21 @@ npm run doctor
 | 裸 Base64          | `iVBORw0KGgo...`                | 解码后仍执行真实格式校验           |
 | SVG 文本           | `<svg ...>...</svg>`            | 渲染为 PNG 后发送                  |
 | 聊天附件路径       | Agent 提供的真实绝对路径          | 仅显示名不等于可读取路径           |
+| 会话附件恢复       | `recover_session_images.js`     | 恢复非视觉模型只看到占位符的图片   |
+
+### Claude Code / OpenCode 粘贴图片恢复
+
+当模型只看到 `[Image #1]`、`[Unsupported Image]`、`Image input error: model cannot read image.png` 或类似的模型不支持提示时，图片可能仍保存在当前客户端的本地会话中。先在 Skill 目录恢复当前工作目录最近的图片附件：
+
+```powershell
+node scripts/recover_session_images.js --client auto --cwd 'C:\当前会话工作目录'
+```
+
+```bash
+node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工作目录'
+```
+
+命令只提取图片 part，经统一输入网关校验后返回临时 `images[].path`，不会输出图片 Base64 或对话正文。多个近期会话同时命中时会返回 `SESSION_AMBIGUOUS`，必须用 `--session <id>` 明确选择。恢复不到会话图片后，才使用 `node scripts/describe_image.js clipboard '描述图片内容'`；不要在 Bash 中内嵌 PowerShell Clipboard 命令。
 
 ## 🖼️ SOP 支持的图片格式
 
@@ -153,7 +168,8 @@ Provider 最终只会收到 `image/jpeg` 或 `image/png`。低熵截图优先保
 
 - Agent 原生处理遵循当前平台的图片处理与隐私策略；SOP 会把图片与问题上传到实际轮询到的视觉 Provider。
 - 请仅处理已获授权的内容。
-- 系统剪贴板由 Agent 读取，不作为进入 SOP 的条件。
+- 系统剪贴板由内置 CLI 读取，只作为会话附件恢复失败后的最后回退。
+- 会话恢复只读取当前工作目录、限定时间内的图片 part，不输出对话正文或 Base64；恢复文件位于系统临时目录并在 24 小时后自动清理。
 - 远程 URL 拒绝私网、回环、链路本地、UNC 和带凭据的地址。
 - API Key 通过请求头发送，不写入 URL 或输出；请勿在聊天中发送 Key。
 

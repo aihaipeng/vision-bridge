@@ -5,6 +5,7 @@
 ## 组件边界
 
 - `scripts/image_input_resolver.js`：从路径、URL、Data URL、Base64 和剪贴板取得原始字节，并强制调用统一标准化网关。
+- `scripts/recover_session_images.js`：从当前 Claude Code/OpenCode 本地会话恢复图片 part，再交给统一输入网关；不读取 Provider 或对话正文。
 - `scripts/image_preparer.js`：将可解码输入标准化为 JPEG/PNG，再按 Provider 配置缩放和压缩。
 - `scripts/providers/gemini.js`：构造 Gemini `generateContent` 请求并执行模型回退。
 - `scripts/providers/zhipu.js`：构造智谱对话补全请求并执行模型回退。

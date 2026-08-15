@@ -6,8 +6,29 @@
 
 - 当前模型支持图片输入且用户未显式要求 `img2txt`：由 Agent 原生处理，结果标注 `[识别方式: Agent 原生视觉]`。
 - 用户显式要求 `img2txt`，或当前模型不支持图片输入：进入 img2txt SOP。
-- 系统剪贴板由 Agent 读取，不作为进入 SOP 的条件。Agent 取得图片后，再按上述两条选择执行路径；没有可读图片时自动读取系统剪贴板一次并提示用户，剪贴板也没有图片时请用户重新上传或提供路径。
+- 系统剪贴板只是最后一级输入回退，不作为进入 SOP 的条件。Agent 取得图片后，再按上述两条选择执行路径。
 - 原生视觉不可用但已有真实路径、URL、Data URL 或 Base64 时，直接把这些输入交给 SOP，不读取剪贴板。
+
+## Claude Code / OpenCode 会话附件恢复
+
+以下提示说明本回合存在图片，但当前模型没有取得图片像素：
+
+- Claude Code：`[Image #n]`、`[Unsupported Image]`、`Cannot read "..." (this model does not support image input)`。
+- OpenCode：`Image input unsupported error`、`Image input error: model cannot read image.png`、`Image input not supported by model`。
+
+报错给出真实绝对路径时直接走 SOP。只有显示名、占位符或无路径报错时，在 Skill 目录运行：
+
+```powershell
+node scripts/recover_session_images.js --client auto --cwd 'C:\当前会话工作目录'
+```
+
+```bash
+node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工作目录'
+```
+
+恢复器只读取限定时间内、工作目录匹配的用户图片 part，并将统一网关校验后的图片写入系统临时目录。它不输出对话正文或 Base64。使用返回 JSON 的 `images[].path` 进入 SOP；如果返回 `SESSION_AMBIGUOUS`，使用错误中对应的当前会话 ID 加 `--session <id>` 重试。
+
+会话中没有可恢复图片时，再运行一次 `node scripts/describe_image.js clipboard '描述图片内容'`。不要手写 `powershell -Command ... Clipboard`；Claude Code 的 Bash 会先展开 `$img` 等 PowerShell 变量，造成“应为表达式”、乱码或空变量错误。会话恢复和内置剪贴板都失败后，才请用户重新粘贴、上传或提供真实路径。
 
 ## 命令行说明
 
@@ -75,7 +96,7 @@ Windows 设置或更新后直接运行 `npm run doctor`，脚本会读取用户�
 
 ## CLI 剪贴板兼容
 
-系统剪贴板由 Agent 读取，不作为进入 SOP 的条件。内置 CLI 仍兼容 `clipboard` 输入：Windows 使用 PowerShell；macOS 使用系统自带的 `osascript`/AppKit，不依赖 `pngpaste` 或其他 Homebrew 工具。没有其他可读图片输入时，Skill 自动调用 `clipboard` 读取一次并提示用户；`clipboard-fallback` 仅作为 CLI 兼容参数保留。
+系统剪贴板是会话附件恢复失败后的最后回退。内置 CLI 的 `clipboard` 输入在 Windows 直接调用 PowerShell 参数数组，不依赖 Bash 拼接。macOS 使用系统自带的 `osascript`/AppKit，不依赖 `pngpaste` 或其他 Homebrew 工具。`clipboard-fallback` 仅作为 CLI 兼容参数保留。
 
 缺少 Key 或 Provider 失败时，CLI 可能返回 `img2txt_retry_*` 临时路径。完成本机 Key 配置并通过 doctor 后，使用该路径重试。
 
