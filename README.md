@@ -1,6 +1,6 @@
 # 🖼️ img2txt
 
-`img2txt` 是一个面向智能体的图像理解 Skill。它统一读取本地文件、公开 URL、Data URL、Base64、聊天附件真实路径和 Windows 剪贴板中的图片，经过解码、安全校验与格式标准化后，调用智谱 GLM 或 Google Gemini 视觉模型输出文字。
+`img2txt` 是一个面向智能体的图像理解 Skill。它统一读取本地文件、公开 URL、Data URL、Base64、聊天附件真实路径和 Windows 剪贴板中的图片，经过解码、安全校验与格式标准化后，调用免费的视觉模型输出文字。
 
 适合以下任务：
 
