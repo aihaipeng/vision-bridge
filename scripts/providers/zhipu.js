@@ -13,6 +13,8 @@ const IMAGE_PROFILE = {
   maxBytes: 5_000_000,
   maxDimension: 6000,
   allowedMimes: ['image/jpeg', 'image/png'],
+  minJpegQuality: 68,
+  qualitySearchIterations: 4,
   compressionProfiles: [[6000, 90], [5000, 88], [4000, 85], [3200, 82], [2400, 78], [1800, 72], [1400, 68], [1024, 60], [768, 50]],
 };
 

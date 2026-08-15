@@ -16,7 +16,8 @@ Provider 不得重新解析文件路径、直接读取剪贴板或负责首次�
 
 - 不使用文件扩展名、URL 后缀、Content-Type 或 Data URL 声明判断真实格式。
 - 接受 Sharp/libvips 当前构建可解码的图片，以及内置解码器支持的 BMP；具体 HEIC/AVIF 能力取决于当前 Sharp 构建。
-- JPEG/PNG 经解码元数据与像素上限校验后保留原字节；SVG 渲染为 PNG；BMP、WebP、TIFF、GIF 首帧及其他可解码格式转为 JPEG，透明区域填充白色。
+- JPEG/PNG 经解码元数据与像素上限校验，存在 EXIF Orientation 时先纠正方向；SVG 和 BMP 转为 PNG；WebP、TIFF、GIF 首帧及其他格式按透明通道转为 PNG 或 JPEG。
+- 含透明通道的输入保持 PNG，不通过白底扁平化丢失透明前景；不透明的非标准格式转为 JPEG。
 - 网关成功时只输出 `image/jpeg` 或 `image/png`；HTML、损坏数据和当前解码器不支持的格式统一返回 `IMAGE_INPUT`。
 - 远程下载与本地读取上限为 32MB。
 - 远程 URL 最多跟随 5 次重定向。
@@ -51,14 +52,14 @@ Provider 不得重新解析文件路径、直接读取剪贴板或负责首次�
 
 ## Provider 图片准备
 
-Provider 输入已经是 JPEG/PNG，只执行自身尺寸与体积限制。每次压缩后重新检查最终字节数和尺寸；最低压缩档仍不满足限制时，在发送 API 请求前失败。
+Provider 输入已经是 JPEG/PNG，只执行自身尺寸与体积限制。低熵 PNG 和透明 PNG 先无损优化；透明 PNG 超限时保持 PNG 并逐档缩放。不透明图片使用快速 JPEG 探测搜索当前尺寸的最高可用质量，再用 MozJPEG 生成最终候选；达到质量下限后才降低尺寸。每次压缩后检查最终字节数和尺寸，最低档仍不满足时在发送请求前失败。
 
 | Provider | 实现限制 | 发送格式 |
 |---|---|---|
 | Gemini | 图片原始数据小于 14,000,000 字节，为 20MB 内联请求的 Base64、JSON 和提示文本预留空间 | JPG 或 PNG，`inline_data` Base64 |
 | 智谱 | 图片小于 5,000,000 字节，宽高不超过 6000 像素 | JPG 或 PNG，裸 Base64 |
 
-PNG 超限时可转为 JPEG 继续逐档压缩；JPEG 直接逐档压缩。Provider 收到其他 MIME 时视为网关绕过错误。
+低熵 PNG 转 JPEG 时使用 `4:4:4` 色度采样保护截图细节，高熵 PNG 和原生 JPEG 使用 `4:2:0` 控制照片体积。Provider 收到其他 MIME 时视为网关绕过错误。
 
 限制来源：
 

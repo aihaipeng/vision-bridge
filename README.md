@@ -107,16 +107,16 @@ reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 
 | 格式                  | 支持状态 | 标准化行为                    | 备注                                                       |
 | --------------------- | -------- | ----------------------------- | ---------------------------------------------------------- |
-| JPEG / JPG            | 支持     | 保留为 JPEG；超限时重新压缩   | 稳定支持                                                   |
-| PNG                   | 支持     | 保留为 PNG；超限时可转为 JPEG | 透明区域转 JPEG 时填充白色                                 |
-| WebP                  | 支持     | 转为 JPEG                     | 已有自动化测试                                             |
-| TIFF / TIF            | 支持     | 读取第一页并转为 JPEG         | 已有自动化测试                                             |
-| GIF                   | 支持     | 读取第一帧并转为 JPEG         | 不进行动画分析                                             |
-| BMP                   | 支持     | 使用内置 BMP 解码器转为 JPEG  | 解码前先校验尺寸                                           |
+| JPEG / JPG            | 支持     | 保留为 JPEG；纠正 EXIF 方向   | 超限时先搜索质量，再逐档缩放                               |
+| PNG                   | 支持     | 保留为 PNG；低熵图先无损优化  | 含透明通道时始终保持 PNG                                   |
+| WebP                  | 支持     | 透明图转 PNG，否则转 JPEG     | 已有自动化测试                                             |
+| TIFF / TIF            | 支持     | 读取第一页；按透明通道选格式  | 已有自动化测试                                             |
+| GIF                   | 支持     | 读取第一帧；按透明通道选格式  | 不进行动画分析                                             |
+| BMP                   | 支持     | 使用内置 BMP 解码器转为 PNG   | 解码前先校验尺寸                                           |
 | SVG                   | 支持     | 以 144 DPI 渲染为 PNG         | 支持文件、Data URL、Base64 和 SVG 文本                     |
-| AVIF                  | 条件支持 | 解码后转为 JPEG               | 取决于当前 Sharp/libvips 构建；当前锁定依赖环境可解码 AVIF |
-| HEIC / HEIF           | 条件支持 | 可解码时转为 JPEG             | 是否可用取决于 Sharp/libvips 的编解码器构建                |
-| 其他 Sharp 可解码格式 | 条件支持 | 通常转为 JPEG                 | 以运行环境的`sharp.format` 能力为准                      |
+| AVIF                  | 条件支持 | 按透明通道转为 PNG 或 JPEG    | 取决于当前 Sharp/libvips 构建；当前锁定依赖环境可解码 AVIF |
+| HEIC / HEIF           | 条件支持 | 按透明通道转为 PNG 或 JPEG    | 是否可用取决于 Sharp/libvips 的编解码器构建                |
+| 其他 Sharp 可解码格式 | 条件支持 | 按透明通道转为 PNG 或 JPEG    | 以运行环境的 `sharp.format` 能力为准                       |
 
 损坏图片、HTML、伪造图片声明或当前解码器不支持的数据会在调用 Provider 前返回 `IMAGE_INPUT`。
 
@@ -127,10 +127,10 @@ reg delete "HKCU\Environment" /v GEMINI_API_KEY /f
 | 本地读取或远程下载 | 最大 32 MB                                | 超限时在解码前拒绝                                  |
 | 解码后图片         | 最大 100,000,000 像素                     | 防止解压缩炸弹和过量内存分配                        |
 | 远程 URL           | 最多 5 次重定向                           | 每次重定向都重新执行公网地址校验                    |
-| 智谱 Provider      | 小于 5,000,000 字节，宽高不超过 6000 像素 | 逐档缩放并压缩为 JPEG                               |
+| 智谱 Provider      | 小于 5,000,000 字节，宽高不超过 6000 像素 | PNG 无损优先；JPEG 先搜索质量，再逐档缩放           |
 | Gemini Provider    | 原始图片数据小于 14,000,000 字节          | 为 20 MB 内联请求的 Base64、JSON 和提示文本预留空间 |
 
-Provider 最终只会收到 `image/jpeg` 或 `image/png`。最低压缩档仍无法满足限制时，请求会在上传前失败。
+Provider 最终只会收到 `image/jpeg` 或 `image/png`。低熵截图优先保留 PNG；不透明高熵图片使用 JPEG，当前尺寸达到质量下限后才降低分辨率。最低压缩档仍无法满足限制时，请求会在上传前失败。
 
 ## 🔒 安全与隐私
 

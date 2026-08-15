@@ -17,6 +17,8 @@ const IMAGE_PROFILE = {
   label: 'Gemini inline image',
   maxBytes: 14_000_000,
   allowedMimes: ['image/jpeg', 'image/png'],
+  minJpegQuality: 68,
+  qualitySearchIterations: 4,
   compressionProfiles: [[8192, 92], [6144, 90], [4096, 86], [3200, 82], [2400, 78], [1800, 72], [1400, 68], [1024, 60]],
 };
 

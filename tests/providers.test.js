@@ -1,9 +1,17 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp');
 const test = require('node:test');
 const gemini = require('../scripts/providers/gemini');
 const zhipu = require('../scripts/providers/zhipu');
 const { ProviderError } = require('../scripts/errors');
-const { createPngBytes, fakeResponse } = require('./helpers');
+const { standardizeImageInput } = require('../scripts/image_input_resolver');
+const {
+    createPngBytes,
+    createTempDir,
+    fakeResponse,
+} = require('./helpers');
 
 test('Gemini sends inline Base64 and falls back between models', async () => {
     const pngBytes = await createPngBytes();
@@ -226,4 +234,41 @@ test('Zhipu sends bare Base64, falls back, and stops on HTTP 400', async () => {
         (error) => error instanceof ProviderError && error.status === 400,
     );
     assert.equal(badRequestCalls, 1);
+});
+
+test('local image flows through the gateway, compression, and Zhipu payload', async (t) => {
+    const width = 1600;
+    const height = 1200;
+    const pixels = Buffer.alloc(width * height * 3, 255);
+    for (let y = 20; y < height; y += 50) {
+        pixels.fill(25, (y * width + 60) * 3, (y * width + width - 60) * 3);
+    }
+    const input = await sharp(pixels, { raw: { width, height, channels: 3 } })
+        .png({ compressionLevel: 0 })
+        .toBuffer();
+    assert.ok(input.length >= zhipu.IMAGE_PROFILE.maxBytes);
+
+    const tempDir = createTempDir(t);
+    const imagePath = path.join(tempDir, 'oversized-screenshot.png');
+    fs.writeFileSync(imagePath, input);
+    const standardized = await standardizeImageInput(imagePath);
+    let uploaded;
+    const result = await zhipu.describe({
+        image: standardized,
+        prompt: '提取截图文字',
+        key: 'test-key',
+        models: ['glm-4.1v-thinking-flash'],
+        fetchImpl: async (_url, options) => {
+            const payload = JSON.parse(options.body);
+            uploaded = Buffer.from(payload.messages[0].content[0].image_url.url, 'base64');
+            return fakeResponse(200, { choices: [{ message: { content: '端到端成功' } }] });
+        },
+    });
+
+    const metadata = await sharp(uploaded).metadata();
+    assert.equal(result.text, '端到端成功');
+    assert.ok(uploaded.length < zhipu.IMAGE_PROFILE.maxBytes);
+    assert.equal(metadata.format, 'png');
+    assert.equal(metadata.width, width);
+    assert.equal(metadata.height, height);
 });
