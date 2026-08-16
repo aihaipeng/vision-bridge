@@ -1,6 +1,6 @@
 # vision-bridge
 
-## 1. 项目简介 (Introduction)
+## 项目简介 (Introduction)
 
 `vision-bridge` 是一个面向编码智能体的图像理解 Skill，让未取得图片内容或不支持图片输入的模型也能完成 OCR、图片描述、视觉分析、错误诊断和多图比较。
 
@@ -23,7 +23,7 @@
 - 当前模型不支持读取图片。
 
 
-## 2. 快速开始 (Quick Start)
+## 快速开始 (Quick Start)
 
 ### 前提条件
 
@@ -132,20 +132,16 @@ npm run doctor
 ```
 
 ### 调用案例
-Coding Agent 以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, 模型使用 deepseek-v4-pro  
+Coding Agent 以 OpenCode TUI、Claude Code CLI、Codex、Reasonix、ZCode、OpenClaw Windows Companion为例, 模型使用 deepseek-v4-flash
+<img width="2556" height="1386" alt="f9ce7c9cbce5a8e27bde3ce6889cf84e" src="https://github.com/user-attachments/assets/0439daea-e95f-42fd-86bf-e413903bdbfe" />
+<img width="2560" height="1393" alt="03b2a320f4a2738206e91a06b563c2b1" src="https://github.com/user-attachments/assets/91091fd8-7176-45fb-b4c1-409a75408258" />
 
-<img width="2558" height="1387" alt="71726a24445729008ea96a488197291c" src="https://github.com/user-attachments/assets/150d3486-fc39-4f49-a33a-7f0b1a12dde2" />
-
-
-其中ZCode直接传入图片并发送后会报错，此时需要指定图片路径并显式调用 vision-bridge skill。
-<img width="1198" height="798" alt="c2a3fc6777875438f5d43452e9103aa9" src="https://github.com/user-attachments/assets/ca3a34b1-02e4-49aa-aa19-3d1b641c2bf8" />
-
-<img width="1198" height="1094" alt="da98544185ad9c6c11e833fc27532250" src="https://github.com/user-attachments/assets/5989f664-bcea-4a35-8d21-8aa1e0f36da2" />
+## 故障排查与解决指南
++ 将图片拷贝或拖入Zcode对话框与提示词一同发送，出现报错：Failed to deserialize the JSON body into the target type: messages[3]: unknown variant `image_url`, expected `text`...
++ 
 
 
-
-
-## 3. 目录结构说明 (Directory Structure)
+## 目录结构说明 (Directory Structure)
 
 ```text
 vision-bridge/
@@ -190,7 +186,7 @@ vision-bridge/
 问题参数可以省略，默认问题为 `请详细描述这张图片的内容`。
 
 
-## 视觉模型
+## 支持的视觉模型
 
 | 模型厂商 | 模型 | 规格与限制 | 状态 | 实测平均耗时 |
 | --- | --- | --- | --- | --- |
@@ -223,7 +219,12 @@ vision-bridge/
 
 更完整的格式和模型限制见 [`references/provider_limits.md`](references/provider_limits.md)。
 
-### 官方参考
+
+## 常见问题与解决方案
+
+
+
+## 官方参考
 
 - [Gemini API Key](https://aistudio.google.com/apikey)
 - [Gemini 图片理解](https://ai.google.dev/gemini-api/docs/image-understanding)
