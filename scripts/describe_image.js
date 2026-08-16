@@ -2,46 +2,53 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {
-  clipboardSystemName,
   standardizeImageInput,
   ImageStandardizationError,
 } = require('./image_input_resolver');
-const { prepareImage } = require('./image_preparer');
 const { CliError, ProviderError, formatCliError, singleLine } = require('./errors');
 const {
+  PROVIDER_EXTRA_KEYS,
   PROVIDER_KEYS,
   resolveCredential,
 } = require('./key_store');
+const {
+  cooledModels,
+  createHealthStore,
+  orderModels,
+  orderProviders,
+  providerCooldown,
+  recordFailure,
+  recordProviderFailure,
+  recordSuccess,
+} = require('./model_health');
 const gemini = require('./providers/gemini');
 const zhipu = require('./providers/zhipu');
+const mistral = require('./providers/mistral');
+const nvidia = require('./providers/nvidia');
+const cloudflare = require('./providers/cloudflare');
 
 const RETRY_CACHE_PREFIX = 'vision_bridge_retry_';
-const CLIPBOARD_FALLBACK_CACHE_PREFIX = `${RETRY_CACHE_PREFIX}clipboard_fallback_`;
 const RETRY_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PROMPT = '请详细描述这张图片的内容';
-const CLIPBOARD_FALLBACK_INPUT = 'clipboard-fallback';
-const PROVIDER_ORDER = ['zhipu', 'gemini'];
+const PROVIDER_ORDER = ['zhipu', 'nvidia', 'gemini', 'mistral', 'cloudflare'];
+const PROVIDER_MODULES = { zhipu, gemini, mistral, nvidia, cloudflare };
+const PROVIDER_MODEL_ENVS = {
+  zhipu: 'ZHIPU_MODELS',
+  gemini: 'GEMINI_MODELS',
+  mistral: 'MISTRAL_MODELS',
+  nvidia: 'NVIDIA_MODELS',
+  cloudflare: 'CLOUDFLARE_MODELS',
+};
 const PROVIDER_REGISTRATION_URLS = {
   zhipu: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys',
   gemini: 'https://aistudio.google.com/apikey',
+  mistral: 'https://console.mistral.ai/api-keys/',
+  nvidia: 'https://build.nvidia.com',
+  cloudflare: 'https://dash.cloudflare.com/profile/api-tokens',
 };
 
 function retryHint(retryPath) {
   return retryPath ? ` 图片已缓存至 ${retryPath}；完成本机 Key 配置并通过 doctor 验证后使用该路径重试，不要再次读取 clipboard。` : '';
-}
-
-function imageToBase64(image) {
-  return image.data.toString('base64');
-}
-
-async function prepareForZhipu(image, options = {}) {
-  const profile = {
-    ...zhipu.IMAGE_PROFILE,
-    ...(options.maxBytes ? { maxBytes: options.maxBytes } : {}),
-    ...(options.maxDimension ? { maxDimension: options.maxDimension } : {}),
-    ...(options.profiles ? { compressionProfiles: options.profiles } : {}),
-  };
-  return prepareImage(image, profile);
 }
 
 function extensionForMime(mime) {
@@ -57,9 +64,8 @@ function extensionForMime(mime) {
   }[mime] || '.img';
 }
 
-function createRetryCache(image, options = {}) {
-  const prefix = options.clipboardFallback ? CLIPBOARD_FALLBACK_CACHE_PREFIX : RETRY_CACHE_PREFIX;
-  const filePath = path.join(os.tmpdir(), `${prefix}${Date.now()}_${process.pid}${extensionForMime(image.mime)}`);
+function createRetryCache(image) {
+  const filePath = path.join(os.tmpdir(), `${RETRY_CACHE_PREFIX}${Date.now()}_${process.pid}${extensionForMime(image.mime)}`);
   fs.writeFileSync(filePath, image.data);
   return filePath;
 }
@@ -95,36 +101,30 @@ function existingRetryCache(input) {
     && fs.existsSync(resolved) ? resolved : null;
 }
 
-function parseGeminiModels(value) {
+function parseModelsValue(value, fallback) {
   const models = String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
-  return models.length ? models : gemini.DEFAULT_MODELS;
+  return models.length ? models : fallback;
 }
 
-function parseZhipuModels() {
-  const explicitList = String(process.env.ZHIPU_MODELS || '').split(',').map((item) => item.trim()).filter(Boolean);
-  if (explicitList.length) return explicitList;
-  const legacyModel = (process.env.ZHIPU_MODEL || process.env.VISION_MODEL || '').trim();
-  return legacyModel ? [legacyModel] : zhipu.DEFAULT_MODELS;
+function parseProviderModels(provider) {
+  return parseModelsValue(process.env[PROVIDER_MODEL_ENVS[provider]], PROVIDER_MODULES[provider].DEFAULT_MODELS);
 }
 
 function providerOrder() {
   return [...PROVIDER_ORDER];
 }
 
-function parseCliImageInput(value) {
-  const clipboardFallbackRead = value === CLIPBOARD_FALLBACK_INPUT;
-  const resolverInput = clipboardFallbackRead ? 'clipboard' : value;
-  return {
-    resolverInput,
-    clipboardFallback: clipboardFallbackRead,
-    clipboardFallbackRead,
-    clipboard: resolverInput === 'clipboard',
-  };
+function credentialReady(provider, credential) {
+  if (!credential || !credential.key) return false;
+  const extraEnvName = PROVIDER_EXTRA_KEYS[provider];
+  return !extraEnvName || Boolean(credential.extra && credential.extra.value);
 }
 
-function isClipboardFallbackRetryCache(filePath) {
-  return Boolean(filePath)
-    && path.basename(filePath).startsWith(CLIPBOARD_FALLBACK_CACHE_PREFIX);
+function parseCliImageInput(value) {
+  return {
+    resolverInput: value,
+    clipboard: value === 'clipboard',
+  };
 }
 
 function summarizeFailures(failures) {
@@ -146,21 +146,22 @@ function keyRequiredError(providers, context = '') {
   return new CliError('KEY_REQUIRED', `${prefix}未检测到可用 API key。${keyGuidance(providers)}；配置后在 Skill 目录运行 npm run doctor 验证，无需重启 Agent。不要在聊天中发送 Key`, 2);
 }
 
-function modelsFor(provider, geminiModels, zhipuModels) {
-  return provider === 'gemini' ? geminiModels : zhipuModels;
-}
-
-function firstTarget(provider, geminiModels, zhipuModels) {
-  const models = modelsFor(provider, geminiModels, zhipuModels);
-  return models.length ? `${provider}/${models[0]}` : provider;
+function modelsForProvider(provider) {
+  return parseProviderModels(provider);
 }
 
 function formatStatusEvent(event, platform = process.platform) {
-  if (event.type === 'clipboard_fallback') {
-    return `[WARN] CLIPBOARD_FALLBACK: 当前回合图片无法直接读取（模型不支持图片输入或附件路径缺失），正在读取当前 ${clipboardSystemName(platform)} 剪贴板`;
-  }
   if (event.type === 'provider_available') {
     return `[INFO] PROVIDER_AVAILABLE: ${event.provider} 已配置，模型 ${event.models.join(', ')}`;
+  }
+  if (event.type === 'provider_cooldown') {
+    return `[INFO] PROVIDER_COOLDOWN: ${event.provider} 处于 Provider 级冷却（剩 ${Math.ceil(event.remainingMs / 1000)}s，${event.lastError}），排到其他厂商之后`;
+  }
+  if (event.type === 'model_cooldown') {
+    const items = event.entries
+      .map(({ model, remainingMs, lastError }) => `${model}（剩 ${Math.ceil(remainingMs / 1000)}s，${lastError}）`)
+      .join('、');
+    return `[INFO] MODEL_COOLDOWN: ${event.provider} 池内冷却模型排到池尾: ${items}`;
   }
   if (event.type === 'provider_skipped') {
     return `[INFO] PROVIDER_SKIPPED: ${event.provider} 缺少 ${event.envName}，不加入本次轮询`;
@@ -180,28 +181,17 @@ function formatStatusEvent(event, platform = process.platform) {
   return `[WARN] MODEL_FAILED: ${event.provider}/${event.model} 失败（${reason}），没有更多可用模型`;
 }
 
-function formatSuccessfulOutput(result, options = {}, platform = process.platform) {
+function formatSuccessfulOutput(result) {
   const text = String(result.text || '')
     .replace(/<\|(?:begin|end)_of_box\|>/g, '')
     .trim();
-  const source = options.clipboardFallback
-    ? `\n\n[图片来源: ${clipboardSystemName(platform)} 剪贴板（图片直读失败回退）]`
-    : '';
-  return `${text}${source}\n\n[识别模型: ${result.provider}/${result.model}]`;
+  return `${text}\n\n[识别模型: ${result.provider}/${result.model}]`;
 }
 
-function imageInputCliError(error, inputMode, platform = process.platform) {
+function imageInputCliError(error) {
   const message = error && (error.message || error);
   const exitCode = error instanceof ImageStandardizationError ? error.code : 1;
-  if (!inputMode.clipboardFallbackRead) {
-    return new CliError('IMAGE_INPUT', message || String(error), exitCode, error);
-  }
-  return new CliError(
-    'IMAGE_INPUT',
-    `图片直读失败后已尝试读取当前 ${clipboardSystemName(platform)} 剪贴板，但没有取得可用图片（${singleLine(message)}）。Agent 下一步：请用户重新上传图片或提供绝对路径；不要搜索工作目录或重复读取剪贴板`,
-    exitCode,
-    error,
-  );
+  return new CliError('IMAGE_INPUT', message || String(error), exitCode, error);
 }
 
 async function standardizeCliImageInput(inputMode, standardizeImpl = standardizeImageInput) {
@@ -242,43 +232,88 @@ async function describeWithProviders(options) {
   const {
     image,
     prompt,
-    credentials,
-    geminiModels = gemini.DEFAULT_MODELS,
-    zhipuModels = zhipu.DEFAULT_MODELS,
-    adapters = { gemini, zhipu },
+    credentials = {},
+    adapters = {},
     fetchImpl,
     onStatus,
+    healthStore = null,
   } = options;
+  const health = healthStore || createHealthStore();
+  const resolvedAdapters = { ...PROVIDER_MODULES, ...adapters };
   const failures = [];
   const availableProviders = [];
   for (const provider of providerOrder()) {
     const credential = credentials[provider];
-    if (!credential || !credential.key) {
+    if (!credentialReady(provider, credential)) {
+      const missingEnvName = !credential || !credential.key
+        ? PROVIDER_KEYS[provider]
+        : PROVIDER_EXTRA_KEYS[provider];
       failures.push({ provider, missing: true });
-      if (onStatus) onStatus({ type: 'provider_skipped', provider, envName: PROVIDER_KEYS[provider] });
+      if (onStatus) onStatus({ type: 'provider_skipped', provider, envName: missingEnvName });
       continue;
     }
     availableProviders.push(provider);
-    if (onStatus) onStatus({
-      type: 'provider_available',
-      provider,
-      models: modelsFor(provider, geminiModels, zhipuModels),
-    });
   }
   if (!availableProviders.length) throw keyRequiredError(providerOrder());
 
-  for (let index = 0; index < availableProviders.length; index += 1) {
-    const provider = availableProviders[index];
+  const now = Date.now();
+  const sortedModels = {};
+  for (const provider of availableProviders) {
+    const baseModels = modelsForProvider(provider);
+    sortedModels[provider] = orderModels(baseModels, provider, health.state, now);
+    if (onStatus) {
+      const cooling = cooledModels(baseModels, provider, health.state, now)
+        .map((model) => {
+          const entry = health.state[`${provider}/${model}`];
+          return { model, remainingMs: entry.cooldownUntil - now, lastError: entry.lastError || '' };
+        });
+      if (cooling.length) onStatus({ type: 'model_cooldown', provider, entries: cooling });
+    }
+  }
+  const orderedProviders = orderProviders(availableProviders, health.state, now);
+  for (const provider of orderedProviders) {
+    const cooldown = providerCooldown(health.state, provider, now);
+    if (cooldown && onStatus) onStatus({ type: 'provider_cooldown', ...cooldown });
+  }
+  for (const provider of availableProviders) {
+    if (onStatus) onStatus({ type: 'provider_available', provider, models: sortedModels[provider] });
+  }
+
+  for (let index = 0; index < orderedProviders.length; index += 1) {
+    const provider = orderedProviders[index];
     const credential = credentials[provider];
-    const nextProvider = availableProviders[index + 1];
-    const fallbackTarget = nextProvider ? firstTarget(nextProvider, geminiModels, zhipuModels) : undefined;
+    const nextProvider = orderedProviders[index + 1];
+    const fallbackTarget = nextProvider
+      ? (sortedModels[nextProvider].length ? `${nextProvider}/${sortedModels[nextProvider][0]}` : nextProvider)
+      : undefined;
     try {
-      const result = provider === 'gemini'
-        ? await adapters.gemini.describe({ image, prompt, key: credential.key, models: geminiModels, fetchImpl, onStatus, fallbackTarget })
-        : await adapters.zhipu.describe({ image, prompt, key: credential.key, models: zhipuModels, fetchImpl, onStatus, fallbackTarget });
+      const result = await resolvedAdapters[provider].describe({
+        image,
+        prompt,
+        key: credential.key,
+        models: sortedModels[provider],
+        accountId: credential.extra && credential.extra.value,
+        fetchImpl,
+        onStatus,
+        fallbackTarget,
+      });
+      recordSuccess(health.state, result.provider, result.model, now);
+      health.persist();
       return { ...result, credential };
     } catch (error) {
       failures.push({ provider, error });
+      const modelFailuresCaught = error instanceof ProviderError ? error.failures : [];
+      for (const failure of modelFailuresCaught) {
+        recordFailure(health.state, failure.provider || provider, failure.model, {
+          scope: failure.scope,
+          code: failure.code,
+          retryAfterMs: failure.retryAfterMs,
+        }, now);
+      }
+      if (!modelFailuresCaught.length || error.code === 'PROVIDER_UNAVAILABLE') {
+        recordProviderFailure(health.state, provider, { code: error.code || 'UNEXPECTED' }, now);
+      }
+      health.persist();
       if (onStatus && (!(error instanceof ProviderError) || error.failures.length === 0)) {
         onStatus({
           type: fallbackTarget ? 'provider_switch' : 'provider_failed',
@@ -310,30 +345,22 @@ async function describeWithProviders(options) {
 
 async function main() {
   if (process.argv.length < 3) {
-    throw new CliError('USAGE', '用法: node vision-bridge/scripts/describe_image.js <图片输入|clipboard|clipboard-fallback> [问题]');
+    throw new CliError('USAGE', '用法: node vision-bridge/scripts/describe_image.js <图片输入|clipboard> [问题]');
   }
   cleanupRetryCaches();
   const inputMode = parseCliImageInput(process.argv[2]);
   const imageInput = inputMode.resolverInput;
   const prompt = process.argv[3] || DEFAULT_PROMPT;
-  if (inputMode.clipboardFallbackRead) {
-    process.stderr.write(`${formatStatusEvent({ type: 'clipboard_fallback' })}\n`);
+  const credentials = {};
+  for (const provider of providerOrder()) {
+    credentials[provider] = resolveCredential(provider);
   }
-  const geminiModels = parseGeminiModels(process.env.GEMINI_MODELS);
-  const zhipuModels = parseZhipuModels();
-  const credentials = {
-    gemini: resolveCredential('gemini'),
-    zhipu: resolveCredential('zhipu'),
-  };
 
   let retryPath = existingRetryCache(imageInput);
-  if (retryPath && isClipboardFallbackRetryCache(retryPath)) {
-    inputMode.clipboardFallback = true;
-  }
-  if (!credentials.gemini.key && !credentials.zhipu.key) {
+  if (!providerOrder().some((provider) => credentialReady(provider, credentials[provider]))) {
     if (inputMode.clipboard) {
       const clipboardImage = await standardizeCliImageInput(inputMode);
-      retryPath = createRetryCache(clipboardImage, inputMode);
+      retryPath = createRetryCache(clipboardImage);
     }
     const error = keyRequiredError(providerOrder());
     throw new CliError(error.code, `${error.message}${retryHint(retryPath)}`, error.exitCode, error);
@@ -341,7 +368,7 @@ async function main() {
 
   const standardized = await standardizeCliImageInput(inputMode);
 
-  if (inputMode.clipboard) retryPath = createRetryCache(standardized, inputMode);
+  if (inputMode.clipboard) retryPath = createRetryCache(standardized);
 
   let result;
   try {
@@ -349,8 +376,6 @@ async function main() {
       image: standardized,
       prompt,
       credentials,
-      geminiModels,
-      zhipuModels,
       onStatus: (event) => process.stderr.write(`${formatStatusEvent(event)}\n`),
     });
   } catch (error) {
@@ -359,7 +384,7 @@ async function main() {
     throw new CliError('PROVIDERS_FAILED', `${error.message || error}${hint}`, 1, error);
   }
 
-  process.stdout.write(`${formatSuccessfulOutput(result, inputMode)}\n`);
+  process.stdout.write(`${formatSuccessfulOutput(result)}\n`);
   if (retryPath && fs.existsSync(retryPath)) fs.rmSync(retryPath, { force: true });
   return result;
 }
@@ -377,9 +402,6 @@ if (require.main === module) main().catch(handleFatalError);
 module.exports = {
   DEFAULT_MODEL: zhipu.DEFAULT_MODEL,
   DEFAULT_PROMPT,
-  CLIPBOARD_FALLBACK_INPUT,
-  ZHIPU_MAX_IMAGE_BYTES: zhipu.IMAGE_PROFILE.maxBytes,
-  ZHIPU_MAX_IMAGE_DIMENSION: zhipu.IMAGE_PROFILE.maxDimension,
   RETRY_CACHE_MAX_AGE_MS,
   cleanupRetryCaches,
   createRetryCache,
@@ -387,16 +409,11 @@ module.exports = {
   formatStatusEvent,
   formatSuccessfulOutput,
   handleFatalError,
-  imageToBase64,
   imageInputCliError,
-  isClipboardFallbackRetryCache,
   main,
-  parseGeminiModels,
   parseCliImageInput,
-  parseZhipuModels,
   keyGuidance,
   keyRequiredError,
-  prepareForZhipu,
   providerOrder,
   standardizeCliImageInput,
 };

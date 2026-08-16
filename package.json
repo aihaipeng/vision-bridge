@@ -9,7 +9,7 @@
   },
   "scripts": {
     "doctor": "node scripts/doctor.js",
-    "check": "node --check scripts/describe_image.js && node --check scripts/doctor.js && node --check scripts/errors.js && node --check scripts/image_input_resolver.js && node --check scripts/image_preparer.js && node --check scripts/key_store.js && node --check scripts/recover_session_images.js && node --check scripts/providers/http.js && node --check scripts/providers/gemini.js && node --check scripts/providers/zhipu.js"
+    "check": "node --check scripts/describe_image.js && node --check scripts/doctor.js && node --check scripts/errors.js && node --check scripts/image_input_resolver.js && node --check scripts/image_preparer.js && node --check scripts/key_store.js && node --check scripts/model_health.js && node --check scripts/recover_session_images.js && node --check scripts/providers/http.js && node --check scripts/providers/gemini.js && node --check scripts/providers/zhipu.js && node --check scripts/providers/mistral.js && node --check scripts/providers/nvidia.js && node --check scripts/providers/cloudflare.js"
   },
   "dependencies": {
     "bmp-ts": "^1.0.9",

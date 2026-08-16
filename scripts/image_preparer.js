@@ -228,12 +228,7 @@ async function bestJpegAtSize(image, candidate, profile, chromaSubsampling) {
   const maxIterations = Number.isInteger(profile.qualitySearchIterations)
     ? Math.max(0, profile.qualitySearchIterations)
     : 4;
-  const qualityBoost = Number.isInteger(profile.mozjpegQualityBoost)
-    ? Math.max(0, profile.mozjpegQualityBoost)
-    : 4;
-  const probeMargin = Number.isInteger(profile.mozjpegProbeMargin)
-    ? Math.max(0, profile.mozjpegProbeMargin)
-    : 10;
+  const probeMargin = 10;
   const probeMinQuality = Math.max(1, minQuality - probeMargin);
 
   const maximum = await convertToJpeg(image, candidate.maxSide, candidate.maxQuality, false, chromaSubsampling);
@@ -264,21 +259,8 @@ async function bestJpegAtSize(image, candidate, profile, chromaSubsampling) {
     iterations += 1;
   }
 
-  const boostedQuality = Math.min(
-    candidate.maxQuality,
-    Math.max(minQuality, bestQuality + qualityBoost),
-  );
-  const optimized = await convertToJpeg(image, candidate.maxSide, boostedQuality, true, chromaSubsampling);
-  if (fitsProfile(optimized.image, optimized.metadata, profile)) return optimized.image;
-  const conservativeQuality = Math.max(minQuality, bestQuality);
-  if (boostedQuality === conservativeQuality) {
-    return conservativeQuality === bestQuality ? best.image : null;
-  }
-
-  const conservative = await convertToJpeg(image, candidate.maxSide, conservativeQuality, true, chromaSubsampling);
-  return fitsProfile(conservative.image, conservative.metadata, profile)
-    ? conservative.image
-    : null;
+  const optimized = await convertToJpeg(image, candidate.maxSide, bestQuality, true, chromaSubsampling);
+  return fitsProfile(optimized.image, optimized.metadata, profile) ? optimized.image : best.image;
 }
 
 async function prepareImage(image, profile) {

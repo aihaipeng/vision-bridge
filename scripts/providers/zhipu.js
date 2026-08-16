@@ -80,21 +80,6 @@ async function describe({ image, prompt, key, models = DEFAULT_MODELS, model, fe
   const failures = [];
   for (let index = 0; index < modelSequence.length; index += 1) {
     const currentModel = modelSequence[index];
-    if (currentModel.toLowerCase() === 'glm-4v-flash') {
-      const failure = {
-        provider: PROVIDER,
-        model: currentModel,
-        code: 'UNSUPPORTED_MODEL',
-        message: '官方文档明确该模型不支持 Base64 图片',
-      };
-      failures.push(failure);
-      const next = modelSequence[index + 1] ? `${PROVIDER}/${modelSequence[index + 1]}` : fallbackTarget;
-      const type = failure.scope === 'provider'
-        ? (next ? 'provider_switch' : 'provider_failed')
-        : (next ? 'model_switch' : 'model_failed');
-      if (onStatus) onStatus({ type, ...failure, next });
-      continue;
-    }
     const payload = {
       model: currentModel,
       messages: [{
@@ -130,4 +115,4 @@ async function describe({ image, prompt, key, models = DEFAULT_MODELS, model, fe
   });
 }
 
-module.exports = { API_URL, DEFAULT_MODEL, DEFAULT_MODELS, IMAGE_PROFILE, PROVIDER, describe, requestModel };
+module.exports = { API_URL, DEFAULT_MODEL, DEFAULT_MODELS, IMAGE_PROFILE, PROVIDER, describe };

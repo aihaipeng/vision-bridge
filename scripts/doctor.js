@@ -1,4 +1,4 @@
-const { PROVIDER_KEYS, resolveCredential } = require('./key_store');
+const { PROVIDER_EXTRA_KEYS, PROVIDER_KEYS, resolveCredential } = require('./key_store');
 
 const MINIMUM_NODE_VERSION = [20, 9, 0];
 const REQUIRED_DEPENDENCIES = ['sharp', 'bmp-ts', 'https-proxy-agent'];
@@ -23,7 +23,17 @@ function dependencyFailures(requireImpl = require) {
 function providerConfiguration(resolveImpl = resolveCredential) {
   return Object.keys(PROVIDER_KEYS).map((provider) => {
     const credential = resolveImpl(provider);
-    return { provider, envName: PROVIDER_KEYS[provider], configured: Boolean(credential.key), source: credential.source };
+    const extraEnvName = PROVIDER_EXTRA_KEYS[provider];
+    const extraConfigured = !extraEnvName
+      || (credential.extra && Boolean(credential.extra.value));
+    return {
+      provider,
+      envName: PROVIDER_KEYS[provider],
+      extraEnvName,
+      extraConfigured,
+      configured: Boolean(credential.key) && extraConfigured,
+      source: credential.source,
+    };
   });
 }
 
@@ -51,9 +61,13 @@ function main() {
   for (const provider of providers) {
     const stream = provider.configured ? process.stdout : process.stderr;
     stream.write(`${provider.configured ? '[OK]' : '[WARN]'} ${provider.envName}: ${provider.configured ? `已配置 (${provider.source})` : '未配置'}\n`);
+    if (provider.extraEnvName) {
+      const extraStream = provider.extraConfigured ? process.stdout : process.stderr;
+      extraStream.write(`${provider.extraConfigured ? '[OK]' : '[WARN]'} ${provider.extraEnvName}: ${provider.extraConfigured ? '已配置' : '未配置'}\n`);
+    }
   }
   if (!providers.some(({ configured }) => configured)) {
-    process.stderr.write('[ERROR] KEY_REQUIRED: 至少配置 ZHIPU_API_KEY 或 GEMINI_API_KEY；配置后直接重新运行 npm run doctor\n');
+    process.stderr.write('[ERROR] KEY_REQUIRED: 至少配置一个 Provider Key（ZHIPU_API_KEY、GEMINI_API_KEY、MISTRAL_API_KEY、NVIDIA_API_KEY 或 CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID）；配置后直接重新运行 npm run doctor\n');
     if (exitCode === 0) exitCode = 2;
   }
   process.exitCode = exitCode;

@@ -5,10 +5,8 @@ const { fetchWithTimeout } = require('./http');
 const PROVIDER = 'gemini';
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent';
 const DEFAULT_MODELS = [
-  'gemini-3.7-flash',
-  'gemini-3.6-flash',
-  'gemini-3.5-flash',
-  'gemini-flash-latest',
+  'gemini-3.1-flash-lite',
+  'gemini-3-flash-preview',
 ];
 // Inline requests are limited to 20MB total. 14MB raw leaves room for Base64 expansion and JSON/text.
 const IMAGE_PROFILE = {
@@ -191,4 +189,4 @@ async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl
   });
 }
 
-module.exports = { API_URL, DEFAULT_MODELS, IMAGE_PROFILE, PROVIDER, describe, requestModel };
+module.exports = { API_URL, DEFAULT_MODELS, IMAGE_PROFILE, PROVIDER, describe };

@@ -3,7 +3,22 @@ const { spawnSync } = require('child_process');
 const PROVIDER_KEYS = {
   gemini: 'GEMINI_API_KEY',
   zhipu: 'ZHIPU_API_KEY',
+  mistral: 'MISTRAL_API_KEY',
+  nvidia: 'NVIDIA_API_KEY',
+  cloudflare: 'CLOUDFLARE_API_TOKEN',
 };
+
+const PROVIDER_EXTRA_KEYS = {
+  cloudflare: 'CLOUDFLARE_ACCOUNT_ID',
+};
+
+function readEnvironmentValue(name) {
+  const userValue = readUserEnvironmentKey(name);
+  if (userValue) return { value: userValue, source: 'user-env' };
+  const processValue = (process.env[name] || '').trim();
+  if (processValue) return { value: processValue, source: 'env' };
+  return { value: '', source: 'missing' };
+}
 
 function readUserEnvironmentKey(name) {
   if (process.platform !== 'win32') return '';
@@ -16,15 +31,16 @@ function readUserEnvironmentKey(name) {
 }
 
 function resolveCredential(provider) {
-  const envName = PROVIDER_KEYS[provider];
-  const userKey = readUserEnvironmentKey(envName);
-  if (userKey) return { provider, key: userKey, source: 'user-env' };
-  const processKey = (process.env[envName] || '').trim();
-  if (processKey) return { provider, key: processKey, source: 'env' };
-  return { provider, key: '', source: 'missing' };
+  const { value: key, source } = readEnvironmentValue(PROVIDER_KEYS[provider]);
+  const extraEnvName = PROVIDER_EXTRA_KEYS[provider];
+  const extra = extraEnvName
+    ? { envName: extraEnvName, ...readEnvironmentValue(extraEnvName) }
+    : undefined;
+  return { provider, key, source, extra };
 }
 
 module.exports = {
+  PROVIDER_EXTRA_KEYS,
   PROVIDER_KEYS,
   readUserEnvironmentKey,
   resolveCredential,

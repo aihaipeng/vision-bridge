@@ -12,7 +12,7 @@
 - 根据错误截图区分可见证据与可能原因，提供可执行的排查步骤。
 - 并行处理多张图片，保留输入顺序、逐图结果、共同点、差异和失败项。
 - 统一接收本地路径、`file://` URL、公开 HTTP(S) URL、Data URL、Base64、系统剪贴板及恢复后的会话附件。
-- 自动校验真实图片格式、转换图片并按 GLM、Gemini 的固定顺序回退。
+- 自动校验真实图片格式、转换图片并按智谱、NVIDIA、Gemini、Mistral、Cloudflare 的固定顺序回退。
 - 在成功结果末尾保留实际使用的 `[识别模型: provider/model]`，便于追溯。
 
 ### 适用边界
@@ -30,8 +30,8 @@
 - Windows 10/11, macOS。
 - Node.js 20.9 或更高版本及 npm。
 - Git，用于从仓库安装或更新 Skill。
-- 可访问智谱或 Gemini API 的出站 HTTPS 网络。
-- 至少配置一个 `ZHIPU_API_KEY` 或 `GEMINI_API_KEY`。
+- 可访问任一 Provider（智谱、Gemini、Mistral、NVIDIA、Cloudflare）API 的出站 HTTPS 网络。
+- 至少配置一个 Provider Key：`ZHIPU_API_KEY`、`GEMINI_API_KEY`、`MISTRAL_API_KEY`、`NVIDIA_API_KEY` 或 `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`。
 
 ### 安装步骤
 
@@ -64,20 +64,47 @@ npm ci --omit=dev
 npm run doctor
 ```
 
+### 升级 Skill
+
+从 git 仓库安装后，后续更新只需拉取并重装依赖，无需重新拷贝目录：
+
+```bash
+cd "%SKILLS_DIR%\vision-bridge"   # 或 cd "$SKILLS_DIR/vision-bridge"
+git pull
+npm ci --omit=dev
+npm run doctor
+```
+
+升级不影响已配置的 Provider Key（存于用户环境变量）和模型健康状态（存于系统临时目录），两者都在 Skill 目录之外。
+
 ### 配置 API Key
 
 智谱 Key 注册地址：<https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys>
 
 Gemini Key 注册地址：<https://aistudio.google.com/apikey>
 
+Mistral Key 注册地址：<https://console.mistral.ai/api-keys/>
+
+NVIDIA Key 注册地址：<https://build.nvidia.com>
+
+Cloudflare 令牌创建地址：<https://dash.cloudflare.com/profile/api-tokens>（权限选 Account / Workers AI / Edit；另需 dashboard 首页右侧的 Account ID）
+
 Windows CMD：
 
 ```cmd
 setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
 setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
+setx MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
+setx NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
+setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
+setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
 
 reg query "HKCU\Environment" /v ZHIPU_API_KEY >nul 2>&1 && echo ZHIPU_API_KEY=SET || echo ZHIPU_API_KEY=NOT_SET
 reg query "HKCU\Environment" /v GEMINI_API_KEY >nul 2>&1 && echo GEMINI_API_KEY=SET || echo GEMINI_API_KEY=NOT_SET
+reg query "HKCU\Environment" /v MISTRAL_API_KEY >nul 2>&1 && echo MISTRAL_API_KEY=SET || echo MISTRAL_API_KEY=NOT_SET
+reg query "HKCU\Environment" /v NVIDIA_API_KEY >nul 2>&1 && echo NVIDIA_API_KEY=SET || echo NVIDIA_API_KEY=NOT_SET
+reg query "HKCU\Environment" /v CLOUDFLARE_API_TOKEN >nul 2>&1 && echo CLOUDFLARE_API_TOKEN=SET || echo CLOUDFLARE_API_TOKEN=NOT_SET
+reg query "HKCU\Environment" /v CLOUDFLARE_ACCOUNT_ID >nul 2>&1 && echo CLOUDFLARE_ACCOUNT_ID=SET || echo CLOUDFLARE_ACCOUNT_ID=NOT_SET
 ```
 
 macOS Bash/zsh：
@@ -85,9 +112,16 @@ macOS Bash/zsh：
 ```bash
 export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
 export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+export MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
+export NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
+export CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
+export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 
 [ -n "$ZHIPU_API_KEY" ] && echo ZHIPU_API_KEY=SET || echo ZHIPU_API_KEY=NOT_SET
 [ -n "$GEMINI_API_KEY" ] && echo GEMINI_API_KEY=SET || echo GEMINI_API_KEY=NOT_SET
+[ -n "$MISTRAL_API_KEY" ] && echo MISTRAL_API_KEY=SET || echo MISTRAL_API_KEY=NOT_SET
+[ -n "$NVIDIA_API_KEY" ] && echo NVIDIA_API_KEY=SET || echo NVIDIA_API_KEY=NOT_SET
+[ -n "$CLOUDFLARE_API_TOKEN" ] && echo CLOUDFLARE_API_TOKEN=SET || echo CLOUDFLARE_API_TOKEN=NOT_SET
 ```
 
 
@@ -125,7 +159,10 @@ vision-bridge/
 │   └── providers/
 │       ├── http.js                  # HTTP、代理、超时和网络错误处理
 │       ├── zhipu.js                 # 智谱视觉 Provider 适配器
-│       └── gemini.js                # Gemini 视觉 Provider 适配器
+│       ├── gemini.js                # Gemini 视觉 Provider 适配器
+│       ├── mistral.js               # Mistral 视觉 Provider 适配器
+│       ├── nvidia.js                # NVIDIA NIM 视觉 Provider 适配器
+│       └── cloudflare.js            # Cloudflare Workers AI 视觉 Provider 适配器
 └── references/
     ├── provider_limits.md           # Provider、模型和图片限制
     └── troubleshooting.md           # 依赖、Key、代理和失败恢复
@@ -150,14 +187,7 @@ vision-bridge/
 
 ## 默认模型顺序
 
-| Provider | 模型 |
-| -------- | ---- |
-| GLM | `glm-4.1v-thinking-flash` |
-| GLM | `glm-4.6v-flash` |
-| Gemini | `gemini-3.7-flash` |
-| Gemini | `gemini-3.6-flash` |
-| Gemini | `gemini-3.5-flash` |
-| Gemini | `gemini-flash-latest` |
+Provider 顺序按国内直连优先，池内模型按实测速度从快到慢，历史失败按语义冷却降权（冷却模型排池尾、冷却厂商排队列尾）。完整轮询清单与耗时见 [`references/provider_limits.md`](references/provider_limits.md)；错误码与失败决策见 [`references/provider-error-codes.md`](references/provider-error-codes.md)。全部 9 个默认模型均经真实 API 逐个验证（2026-08-16）。
 
 ## 图片格式与限制
 
@@ -177,4 +207,9 @@ vision-bridge/
 - [智谱 API Key 管理](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
 - [智谱对话补全 API](https://docs.bigmodel.cn/api-reference/%E6%A8%A1%E5%9E%8B-api/%E5%AF%B9%E8%AF%9D%E8%A1%A5%E5%85%A8)
 - [智谱视觉模型](https://docs.bigmodel.cn/cn/guide/models/vlm)
+- [Mistral API Key](https://console.mistral.ai/api-keys/)
+- [Mistral 视觉能力](https://docs.mistral.ai/capabilities/vision/)
+- [NVIDIA Build](https://build.nvidia.com)
+- [Cloudflare API Token](https://dash.cloudflare.com/profile/api-tokens)
+- [Cloudflare Workers AI Llama 3.2 Vision](https://developers.cloudflare.com/workers-ai/models/llama-3.2-11b-vision-instruct/)
 - [Apple NSPasteboard](https://developer.apple.com/documentation/appkit/nspasteboard)

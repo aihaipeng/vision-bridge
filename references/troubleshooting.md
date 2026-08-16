@@ -56,7 +56,7 @@ cd 'C:/path/to/vision-bridge'
 npm run doctor
 ```
 
-Doctor 会检查 Node.js 版本、`sharp`、`bmp-ts`、`https-proxy-agent` 和两个 Provider 的 Key 配置，只报告 Key 是否存在，不输出 Key 内容。只有返回 `DEPENDENCY` 时才安装锁定依赖：
+Doctor 会检查 Node.js 版本、`sharp`、`bmp-ts`、`https-proxy-agent` 和全部 Provider 的 Key 配置，只报告 Key 是否存在，不输出 Key 内容。只有返回 `DEPENDENCY` 时才安装锁定依赖：
 
 ```cmd
 npm ci --omit=dev
@@ -70,17 +70,27 @@ npm ci --omit=dev
 
 - `ZHIPU_API_KEY`
 - `GEMINI_API_KEY`
+- `MISTRAL_API_KEY`
+- `NVIDIA_API_KEY`
+- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`（两者都配置才启用 Cloudflare）
 
 注册地址：
 
 - 智谱：[https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
 - Gemini：[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- Mistral：[https://console.mistral.ai/api-keys/](https://console.mistral.ai/api-keys/)
+- NVIDIA：[https://build.nvidia.com](https://build.nvidia.com)
+- Cloudflare：[https://dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)（令牌需 Workers AI: Edit 权限；Account ID 见 dashboard 首页右侧）
 
 不要要求用户在聊天中发送 Key，也不要通过标准输入或命令参数把用户发来的 Key 传给脚本。Windows 用户在自己的终端设置当前用户环境变量：
 
 ```cmd
 setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
 setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
+setx MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
+setx NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
+setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
+setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
 ```
 
 `setx` 不会修改已经运行的进程。脚本会直接读取用户级持久化值，因此可以在当前会话重新调用。
@@ -89,6 +99,10 @@ macOS 用户在启动 Agent 的同一 shell 环境中配置进程环境变量：
 ```bash
 export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
 export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+export MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
+export NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
+export CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
+export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 npm run doctor
 ```
 
@@ -116,6 +130,8 @@ stderr 中以下状态用于主 Agent 判断进度，不是图片内容：
 
 - `PROVIDER_AVAILABLE`：Key 已配置，Provider 已加入本次固定队列。
 - `PROVIDER_SKIPPED`：Key 未配置，本次不调用该 Provider。
+- `MODEL_COOLDOWN`：该 Provider 池内某些模型处于失败冷却，排到池尾（非失败，仍会兜底尝试）。
+- `PROVIDER_COOLDOWN`：该 Provider 处于失败冷却，排到其他厂商之后（非失败，仍会兜底尝试）。
 - `PROVIDER_SWITCH`：当前 Provider 发生 Provider 级故障，消息包含原因和下一 Provider。
 - `PROVIDER_FAILED`：当前 Provider 发生 Provider 级故障且没有更多可用 Provider。
 - `MODEL_SWITCH`：当前模型失败，消息包含错误代码、原因和下一模型或 Provider。
