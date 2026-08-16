@@ -15,7 +15,7 @@ const {
 const gemini = require('./providers/gemini');
 const zhipu = require('./providers/zhipu');
 
-const RETRY_CACHE_PREFIX = 'img2txt_retry_';
+const RETRY_CACHE_PREFIX = 'vision_bridge_retry_';
 const CLIPBOARD_FALLBACK_CACHE_PREFIX = `${RETRY_CACHE_PREFIX}clipboard_fallback_`;
 const RETRY_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PROMPT = '请详细描述这张图片的内容';
@@ -310,7 +310,7 @@ async function describeWithProviders(options) {
 
 async function main() {
   if (process.argv.length < 3) {
-    throw new CliError('USAGE', '用法: node img2txt/scripts/describe_image.js <图片输入|clipboard|clipboard-fallback> [问题]');
+    throw new CliError('USAGE', '用法: node vision-bridge/scripts/describe_image.js <图片输入|clipboard|clipboard-fallback> [问题]');
   }
   cleanupRetryCaches();
   const inputMode = parseCliImageInput(process.argv[2]);

@@ -226,7 +226,7 @@ async function requestRemote(currentUrl, redirectsLeft) {
       port: url.port || undefined,
       path: `${url.pathname}${url.search}`,
       method: 'GET',
-      headers: { 'User-Agent': 'img2txt/1.0' },
+      headers: { 'User-Agent': 'vision-bridge/1.0' },
       lookup: createPinnedLookup(addresses),
       servername: url.hostname,
       timeout: REMOTE_TIMEOUT_MS,

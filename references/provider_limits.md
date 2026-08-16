@@ -1,6 +1,6 @@
 # Provider 与图片限制
 
-仅在进入 img2txt SOP 并修改 Provider、模型列表、图片转换、路由规则或诊断请求被拒绝时读取本文件。Agent 原生视觉结果不经过这里描述的输入网关、压缩策略或 Provider 轮询。
+仅在进入 vision-bridge SOP 并修改 Provider、模型列表、图片转换、路由规则或诊断请求被拒绝时读取本文件。Agent 原生视觉结果不经过这里描述的输入网关、压缩策略或 Provider 轮询。
 
 ## 组件边界
 

@@ -1,11 +1,11 @@
 # 故障排查与恢复
 
-仅在实际进入 img2txt SOP 后，处理依赖、密钥、代理、退出码或 Provider 调用失败时读取本文件。Agent 原生处理不需要运行 doctor、配置 SOP Provider Key 或读取本文件。
+仅在实际进入 vision-bridge SOP 后，处理依赖、密钥、代理、退出码或 Provider 调用失败时读取本文件。Agent 原生处理不需要运行 doctor、配置 SOP Provider Key 或读取本文件。
 
 ## 先确认执行路径
 
-- 当前模型支持图片输入且用户未显式要求 `img2txt`：由 Agent 原生处理，结果标注 `[识别方式: Agent 原生视觉]`。
-- 用户显式要求 `img2txt`，或当前模型不支持图片输入：进入 img2txt SOP。
+- 当前模型支持图片输入且用户未显式要求 `vision-bridge`：由 Agent 原生处理，结果标注 `[识别方式: Agent 原生视觉]`。
+- 用户显式要求 `vision-bridge`，或当前模型不支持图片输入：进入 vision-bridge SOP。
 - 系统剪贴板只是最后一级输入回退，不作为进入 SOP 的条件。Agent 取得图片后，再按上述两条选择执行路径。
 - 原生视觉不可用但已有真实路径、URL、Data URL 或 Base64 时，直接把这些输入交给 SOP，不读取剪贴板。
 
@@ -37,15 +37,15 @@ node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工�
 如果工具支持 `cwd` 或 `workdir`，直接将其设置为 Skill 目录。必须在命令中切换目录时，分别使用：
 
 ```cmd
-cd /d "C:\path\to\img2txt"
+cd /d "C:\path\to\vision-bridge"
 ```
 
 ```powershell
-Set-Location -LiteralPath 'C:\path\to\img2txt'
+Set-Location -LiteralPath 'C:\path\to\vision-bridge'
 ```
 
 ```bash
-cd 'C:/path/to/img2txt'
+cd 'C:/path/to/vision-bridge'
 ```
 
 ## 依赖检查
@@ -98,7 +98,7 @@ Windows 设置或更新后直接运行 `npm run doctor`，脚本会读取用户�
 
 系统剪贴板是会话附件恢复失败后的最后回退。内置 CLI 的 `clipboard` 输入在 Windows 直接调用 PowerShell 参数数组，不依赖 Bash 拼接。macOS 使用系统自带的 `osascript`/AppKit，不依赖 `pngpaste` 或其他 Homebrew 工具。`clipboard-fallback` 仅作为 CLI 兼容参数保留。
 
-缺少 Key 或 Provider 失败时，CLI 可能返回 `img2txt_retry_*` 临时路径。完成本机 Key 配置并通过 doctor 后，使用该路径重试。
+缺少 Key 或 Provider 失败时，CLI 可能返回 `vision_bridge_retry_*` 临时路径。完成本机 Key 配置并通过 doctor 后，使用该路径重试。
 
 ### macOS 实机验收
 
@@ -146,7 +146,7 @@ stderr 固定格式：
 - `SERVICE_UNAVAILABLE`：Provider 服务暂不可用；稍后重试或检查官方服务状态。
 - `RATE_LIMITED`：等待配额恢复，或配置另一 Provider 的有效 Key。
 - `PROVIDERS_FAILED`：按错误中的每个模型原因检查模型可用性、输入和 Provider 状态；必要时读取 `references/provider_limits.md`。
-- `UNEXPECTED`：先运行 `npm run check` 和 `npm test`，不要向用户输出 Node 堆栈。
+- `UNEXPECTED`：先运行 `npm run check`，不要向用户输出 Node 堆栈。
 
 ## 代理
 

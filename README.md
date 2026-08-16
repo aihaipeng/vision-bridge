@@ -1,8 +1,8 @@
-# img2txt
+# vision-bridge
 
 ## 1. 项目简介 (Introduction)
 
-`img2txt` 是一个面向编码智能体的图像理解 Skill，让未取得图片内容或不支持图片输入的模型也能完成 OCR、图片描述、视觉分析、错误诊断和多图比较。
+`vision-bridge` 是一个面向编码智能体的图像理解 Skill，让未取得图片内容或不支持图片输入的模型也能完成 OCR、图片描述、视觉分析、错误诊断和多图比较。
 
 ### 核心功能点 (Features)
 
@@ -17,9 +17,9 @@
 
 ### 适用边界
 
-在以下情况使用 `img2txt`：
+在以下情况使用 `vision-bridge`：
 
-- 用户明确要求使用 `img2txt`。
+- 用户明确要求使用 `vision-bridge`。
 - 当前模型不支持读取图片。
 
 
@@ -41,8 +41,8 @@ Windows CMD：
 
 ```cmd
 set "SKILLS_DIR=C:\path\to\your\skills"
-git clone https://github.com/aihaipeng/img2txt.git "%SKILLS_DIR%\img2txt"
-cd /d "%SKILLS_DIR%\img2txt"
+git clone https://github.com/aihaipeng/vision-bridge.git "%SKILLS_DIR%\vision-bridge"
+cd /d "%SKILLS_DIR%\vision-bridge"
 npm ci --omit=dev
 npm run doctor
 ```
@@ -51,8 +51,8 @@ macOS Bash/zsh：
 
 ```bash
 SKILLS_DIR='/path/to/your/skills'
-git clone https://github.com/aihaipeng/img2txt.git "$SKILLS_DIR/img2txt"
-cd "$SKILLS_DIR/img2txt"
+git clone https://github.com/aihaipeng/vision-bridge.git "$SKILLS_DIR/vision-bridge"
+cd "$SKILLS_DIR/vision-bridge"
 npm ci --omit=dev
 npm run doctor
 ```
@@ -101,7 +101,7 @@ npm run doctor
 Coding Agent 以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, 模型使用 deepseek-v4-pro
 <img width="2558" height="1387" alt="image" src="https://github.com/user-attachments/assets/508bd7d7-24df-4856-aac4-cc6c5365def0" />
 
-其中ZCode直接传入图片并发送后会报错，此时需要指定图片路径并显式调用 img2txt skill。
+其中ZCode直接传入图片并发送后会报错，此时需要指定图片路径并显式调用 vision-bridge skill。
 <img width="1198" height="798" alt="image" src="https://github.com/user-attachments/assets/748ea696-a2e0-45b3-a3bd-01ea5d962cd8" />
 <img width="1198" height="1094" alt="image" src="https://github.com/user-attachments/assets/b8402be6-99c0-4a84-b61f-b0e07a132765" />
 
@@ -109,7 +109,7 @@ Coding Agent 以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, �
 ## 3. 目录结构说明 (Directory Structure)
 
 ```text
-img2txt/
+vision-bridge/
 ├── SKILL.md                         # Skill 入口、触发边界与执行工作流
 ├── README.md                        # 安装、配置、使用和维护说明
 ├── package.json                     # Node.js 版本、依赖和验证命令
@@ -126,17 +126,9 @@ img2txt/
 │       ├── http.js                  # HTTP、代理、超时和网络错误处理
 │       ├── zhipu.js                 # 智谱视觉 Provider 适配器
 │       └── gemini.js                # Gemini 视觉 Provider 适配器
-├── references/
-│   ├── provider_limits.md           # Provider、模型和图片限制
-│   └── troubleshooting.md           # 依赖、Key、代理和失败恢复
-└── tests/
-    ├── cli.test.js                  # CLI 与文档契约测试
-    ├── input_resolver.test.js       # 输入网关测试
-    ├── image_preparer.test.js       # 图片转换与限制测试
-    ├── providers.test.js            # Provider 请求与回退测试
-    ├── routing.test.js              # Provider 路由测试
-    ├── session_image_recovery.test.js # 会话附件恢复测试
-    └── helpers.js                   # 测试辅助函数
+└── references/
+    ├── provider_limits.md           # Provider、模型和图片限制
+    └── troubleshooting.md           # 依赖、Key、代理和失败恢复
 ```
 
 ## 支持的输入

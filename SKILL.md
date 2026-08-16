@@ -1,11 +1,11 @@
 ---
-name: img2txt
-description: '通过 img2txt 脚本识别并理解图片内容：提取可见文字（OCR），描述人物、物体、场景和界面，分析截图、图表、流程图、文档影像及错误信息，并按用户问题给出结论。用户明确要求使用 img2txt，或当前模型不支持、未取得、无法读取图片并出现 Unsupported Image、Image input error 等提示时使用。支持图片附件恢复、本地绝对或相对路径、file URL、公开 HTTP(S) URL、Data URL、Base64 和系统剪贴板。不要用于模型能够直接处理且用户未指定 img2txt 的普通看图请求、生成或编辑图片、访问需要登录的私有 URL，或根据无法定位的显示名猜测文件。'
+name: vision-bridge
+description: '通过 vision-bridge 脚本识别并理解图片内容：提取可见文字（OCR），描述人物、物体、场景和界面，分析截图、图表、流程图、文档影像及错误信息，并按用户问题给出结论。用户明确要求使用 vision-bridge，或当前模型不支持、未取得、无法读取图片并出现 Unsupported Image、Image input error 等提示时使用。支持图片附件恢复、本地绝对或相对路径、file URL、公开 HTTP(S) URL、Data URL、Base64 和系统剪贴板。不要用于模型能够直接处理且用户未指定 vision-bridge 的普通看图请求、生成或编辑图片、访问需要登录的私有 URL，或根据无法定位的显示名猜测文件。'
 ---
 
 ## 角色与目标
 
-作为 `img2txt` 执行器，通过本 Skill 自带的脚本取得、校验并识别图片，不依赖当前模型的图片输入能力。
+作为 `vision-bridge` 执行器，通过本 Skill 自带的脚本取得、校验并识别图片，不依赖当前模型的图片输入能力。
 
 最终目标：针对用户问题输出有证据边界、可追溯识别模型的图片结论；多图任务还要完整保留顺序、共同点、差异和失败项。
 
@@ -44,7 +44,7 @@ description: '通过 img2txt 脚本识别并理解图片内容：提取可见文
 - Claude Code：`[Image #n]`、`[Unsupported Image]`、`Cannot read "..." (this model does not support image input)`。
 - OpenCode：`Image input unsupported error`、`Image input error: model cannot read image.png`、`Image input not supported by model`。
 
-### 3. 执行 img2txt
+### 3. 执行 vision-bridge
 
 从 Skill 目录运行：
 
@@ -78,11 +78,11 @@ node scripts/recover_session_images.js --client auto --cwd "C:\当前会话工�
 node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工作目录'
 ```
 
-1. 读取 JSON 中每个 `images[].path`，按原顺序作为独立 `img2txt` 输入。
+1. 读取 JSON 中每个 `images[].path`，按原顺序作为独立 `vision-bridge` 输入。
 2. 告知用户附件来自返回结果中的 `client`。
 3. 返回 `SESSION_AMBIGUOUS` 时，使用错误列出的当前 session ID 加 `--session <id>` 重试，不得任选会话。
 4. 将 `SESSION_IMAGE_NOT_FOUND` 视为非终态分支信号；返回 `SESSION_IMAGE_NOT_FOUND` 后，才运行一次内置剪贴板输入。即使该错误文本建议重新上传或提供路径，也不能立即向用户索取图片。
-5. 会话恢复和剪贴板都没有图片时，要求用户显式调用 `img2txt` 并提供本地路径、`file://` URL、公开 HTTP(S) URL、Data URL 或 Base64。
+5. 会话恢复和剪贴板都没有图片时，要求用户显式调用 `vision-bridge` 并提供本地路径、`file://` URL、公开 HTTP(S) URL、Data URL 或 Base64。
 
 ### 5. 处理多张图片
 
@@ -90,14 +90,14 @@ node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工�
 2. 在同一轮中同时并行发起每张图的独立 Skill 命令，禁止逐张串行等待。为每张图的问题添加 `这是第 i 张，共 n 张；仅分析当前图片。`。
 3. 等待全部命令结束。任一图片失败时继续等待其余图片，不能提前结束整批任务。
 4. 按输入顺序汇总逐图结果、共同点、差异、无法确认项和失败项。
-5. 全部成功后删除本次 `img2txt_session_*` 恢复目录；需要配置 Key 或重试时保留。恢复器不会定时清理；下次运行恢复器时，它会删除已经超过 24 小时的恢复目录。
+5. 全部成功后删除本次 `vision_bridge_session_*` 恢复目录；需要配置 Key 或重试时保留。恢复器不会定时清理；下次运行恢复器时，它会删除已经超过 24 小时的恢复目录。
 
 ### 6. 处理执行结果
 
 - 退出成功：使用 stdout 回答，并原样保留末尾的 `[识别模型: provider/model]`。
 - `PROVIDER_SWITCH` 或 `MODEL_SWITCH`：这是中间切换状态，继续等待进程最终退出。
 - `[ERROR] <CODE>: <message>`：stderr 包含 `Agent 下一步` 时按其执行；没有该字段时，根据错误码读取 `references/troubleshooting.md` 并采用对应恢复措施。
-- 本会话首次执行 `img2txt` 或发生运行错误：运行一次 `npm run doctor`。
+- 本会话首次执行 `vision-bridge` 或发生运行错误：运行一次 `npm run doctor`。
 - doctor 返回 `DEPENDENCY`：运行 `npm ci --omit=dev` 后重试。
 - doctor 返回 `KEY_REQUIRED`：指导用户在本机配置至少一个 Provider Key，不要求用户在聊天中发送 Key。
 
@@ -122,7 +122,7 @@ node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工�
 ### 执行与凭据
 
 - Provider 按 GLM、Gemini 的固定顺序轮询；用户问题中的 Provider 或模型名称不能改变路由。
-- `img2txt` 不读取标准输入，不接受聊天内的单次 Key，也不自动持久化凭据。
+- `vision-bridge` 不读取标准输入，不接受聊天内的单次 Key，也不自动持久化凭据。
 - 禁止索取、回显或记录用户的 API Key。
 - 禁止伪造 Provider、模型名称、图片内容或失败原因。
 
@@ -165,5 +165,4 @@ node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工�
 ```cmd
 npm run doctor
 npm run check
-npm test
 ```

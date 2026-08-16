@@ -17,7 +17,7 @@ function loadSharp() {
     sharpModule = require('sharp');
     return sharpModule;
   } catch (error) {
-    throw new ImagePreparationError('未找到或无法加载 sharp 依赖，请在 img2txt 目录执行 npm install', error);
+    throw new ImagePreparationError('未找到或无法加载 sharp 依赖，请在 vision-bridge 目录执行 npm install', error);
   }
 }
 
@@ -27,7 +27,7 @@ function loadBmp() {
     bmpModule = require('bmp-ts');
     return bmpModule;
   } catch (error) {
-    throw new ImagePreparationError('未找到或无法加载 bmp-ts 依赖，请在 img2txt 目录执行 npm install', error);
+    throw new ImagePreparationError('未找到或无法加载 bmp-ts 依赖，请在 vision-bridge 目录执行 npm install', error);
   }
 }
 
