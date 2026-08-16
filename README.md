@@ -192,34 +192,6 @@ vision-bridge/
 
 ## 视觉模型  
 
-+ 模型实测对比
-  | 厂商       | 模型                                       | 输入规格                                                             | 调用限制                                    | 状态/备注                 |
-| ---------- | ------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------- | ------------------------- |
-| 智谱       | `glm-4.6v-flash`                         | 128K 上下文；图像/视频/文件/文本；思考模式+工具调用                  | 免费层约 1 并                               | 长期免费，主力推荐        |
-| 智谱       | `glm-4.1v-thinking-flash`                | 64K 上下文/16K 输出；图像/视频/文本                                  | 同左                                        | 长期免费                  |
-| 智谱       | `glm-4v-flash`                           | 16K 上下文/1K 输出；单图 ≤5MB、≤6000×6000px                       | 同左                                        | 长期免费，最老            |
-| Gemini     | `gemini-3-flash-preview`                 | 1M 上下文/64K 输出；图像/视频/音频/PDF                               | 约 10 RPM / 1500 RPD / ~250K TPM            | 免费，preview 限速较紧    |
-| Gemini     | `gemini-3.1-flash-lite`                  | 1M 上下文/64K 输出；同上                                             | 约 15 RPM / 1000–1500 RPD                  | 2026-05 转正式版          |
-| Gemini     | `gemini-2.5-flash`                       | 1M 上下文/64K 输出；同上                                             | 约 10–15 RPM / 1500 RPD / 250K–1M TPM     | ⚠️ 2026-10-16 下线      |
-| Gemini     | `gemini-2.5-flash-lite`                  | 1M 上下文/64K 输出；同上                                             | 约 15–30 RPM / 1500 RPD                    | ⚠️ 2026-10-16 下线      |
-| Mistral    | `pixtral-large-2411`                     | 128K 上下文；图像/文本                                               | Free 模式约 1 RPS（以账户 Limits 页为准）   | 长期免费层，无信用卡      |
-| Mistral    | `pixtral-12b`                            | 128K 上下文；图像/文本（任意尺寸）                                   | 同左                                        | 长期免费层                |
-| NVIDIA     | `meta/llama-3.2-11b-vision-instruct`     | 128K 上下文；图像/文本                                               | 约 40 RPM（全局上限，无官方公布、无日上限） | 免费仅限评估，禁生产      |
-| NVIDIA     | `nvidia/llama-3.1-nemotron-nano-vl-8b`   | VL 系列规格                                                          | 同左                                        | 列表常轮换                |
-| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 128K 上下文（prompt≤131072）；图像/文本；需先发`"prompt":"agree"` | 每日 10,000 neurons                         | 长期免费，OpenAI 兼容接口 |
-
-+ 模型平均耗时对比
-  | Provider | 模型 | 成功 | 平均 | 最快 | 中位 | 最慢 | 重试次数 |
-|---|---|---|---|---|---|---|---|
-| gemini | `gemini-3.1-flash-lite` | 5/5 | 1.83s | 1.25s | 1.72s | 2.67s | 1 |
-| zhipu | `glm-4.1v-thinking-flash` | 5/5 | 2.34s | 1.71s | 2.26s | 2.93s | 1 |
-| mistral | `mistral-medium-3.5` | 5/5 | 3.48s | 2.82s | 3.56s | 4.17s | 0 |
-| mistral | `mistral-medium-latest` | 5/5 | 4.11s | 3.35s | 3.63s | 5.86s | 0 |
-| gemini | `gemini-3-flash-preview` | 5/5 | 5.23s | 2.63s | 5.70s | 7.64s | 2 |
-| nvidia | `meta/llama-3.2-11b-vision-instruct` | 5/5 | 6.71s | 6.48s | 6.58s | 7.29s | 0 |
-| zhipu | `glm-4.6v-flash` | 5/5 | 9.88s | 4.84s | 9.45s | 17.73s | 3 |
-| cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 5/5 | 17.58s | 16.05s | 16.99s | 19.13s | 0 |
-| nvidia | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | 5/5 | 20.08s | 14.11s | 19.91s | 25.70s | 4 |
 
 
 ## 图片格式与限制
