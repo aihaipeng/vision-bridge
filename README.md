@@ -135,12 +135,6 @@ npm run doctor
 Coding Agent 以 OpenCode TUI、Claude Code CLI、Codex、Reasonix、ZCode、OpenClaw Windows Companion为例, 模型使用 deepseek-v4-flash
 <img width="2556" height="1386" alt="f9ce7c9cbce5a8e27bde3ce6889cf84e" src="https://github.com/user-attachments/assets/0439daea-e95f-42fd-86bf-e413903bdbfe" />
 <img width="2560" height="1393" alt="03b2a320f4a2738206e91a06b563c2b1" src="https://github.com/user-attachments/assets/91091fd8-7176-45fb-b4c1-409a75408258" />
-
-## 故障排查与解决指南
-+ 将图片拷贝或拖入Zcode对话框与提示词一同发送，出现报错：Failed to deserialize the JSON body into the target type: messages[3]: unknown variant `image_url`, expected `text`...
-+ 
-
-
 ## 目录结构说明 (Directory Structure)
 
 ```text
@@ -188,24 +182,19 @@ vision-bridge/
 
 ## 支持的视觉模型
 
-| 模型厂商 | 模型 | 规格与限制 | 状态 | 实测平均耗时 |
-| --- | --- | --- | --- | --- |
-| 智谱 | `glm-4.6v-flash` | 128K 上下文；图像/视频/文件/文本 | 长期免费，主力推荐 | 9.88s |
-| 智谱 | `glm-4.1v-thinking-flash` | 64K 上下文；图像/视频/文本 | 长期免费 | 2.34s |
-| 智谱 | `glm-4v-flash` | 16K 上下文；单图 ≤5MB | 长期免费，最老 | 未入池 |
-| Gemini | `gemini-3.1-flash-lite` | 1M 上下文；图像/视频/音频/PDF | 免费，2026-05 转正式版 | 1.83s |
-| Gemini | `gemini-3-flash-preview` | 1M 上下文；同上 | 免费，preview 限速较紧 | 5.23s |
-| Gemini | `gemini-2.5-flash` | 1M 上下文；同上 | ⚠️ 2026-10-16 下线 | 新 Key 已 404，不入池 |
-| Gemini | `gemini-2.5-flash-lite` | 1M 上下文；同上 | ⚠️ 2026-10-16 下线 | 同上 |
-| Mistral | `mistral-medium-3.5` | 128K 上下文；图像/文本 | 长期免费 | 3.48s |
-| Mistral | `mistral-medium-latest` | 128K 上下文；图像/文本 | 长期免费 | 4.11s |
-| Mistral | `pixtral-large-2411` | 128K 上下文；图像/文本 | 长期免费层 | 已下线 |
-| Mistral | `pixtral-12b` | 128K 上下文；图像/文本 | 长期免费层 | 已下线 |
-| NVIDIA | `meta/llama-3.2-11b-vision-instruct` | 128K 上下文；图像/文本 | 免费仅限评估，禁生产 | 6.71s |
-| NVIDIA | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | VL 系列规格 | 列表常轮换 | 20.08s |
-| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 128K 上下文；需先发 `agree` | 长期免费 | 17.58s |
+| 模型厂商 | 模型 | 规格与限制 | 状态 | 网络要求 | 实测平均耗时 |
+| --- | --- | --- | --- | --- | --- |
+| 智谱 | `glm-4.1v-thinking-flash` | 64K 上下文；图像/视频/文本 | 长期免费 | 国内直连 | 2.34s |
+| 智谱 | `glm-4.6v-flash` | 128K 上下文；图像/视频/文件/文本 | 长期免费，主力推荐 | 国内直连 | 9.88s |
+| NVIDIA | `meta/llama-3.2-11b-vision-instruct` | 128K 上下文；图像/文本 | 免费仅限评估，禁生产 | 国内直连 | 6.71s |
+| NVIDIA | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | VL 系列规格 | 列表常轮换 | 国内直连 | 20.08s |
+| Gemini | `gemini-3.1-flash-lite` | 1M 上下文；图像/视频/音频/PDF | 免费，2026-05 转正式版 | 需代理 | 1.83s |
+| Gemini | `gemini-3-flash-preview` | 1M 上下文；同上 | 免费，preview 限速较紧 | 需代理 | 5.23s |
+| Mistral | `mistral-medium-3.5` | 128K 上下文；图像/文本 | 长期免费 | 需代理 | 3.48s |
+| Mistral | `mistral-medium-latest` | 128K 上下文；图像/文本 | 长期免费 | 需代理 | 4.11s |
+| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 128K 上下文；需先发 `agree` | 长期免费 | 需代理 | 17.58s |
 
-规格核对自官方文档；实测于 2026-08-16，以同一标准图对池内 9 个模型各调用 5 次、成功均 5/5，耗时为平均。勘误：Mistral 已下线 pixtral 系列，视觉由 `mistral-medium` 承载；Gemini 2.5 系对新 Key 已返回 404；NVIDIA nano 模型名已改 `-v1` 后缀。池内模型按速度序（快→慢）轮询。
+规格核对自官方文档，实测于 2026-08-16。
 
 
 ## 图片格式与限制
