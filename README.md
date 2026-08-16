@@ -132,12 +132,17 @@ npm run doctor
 ```
 
 ### 调用案例
-Coding Agent 以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, 模型使用 deepseek-v4-pro
-<img width="2558" height="1387" alt="image" src="https://github.com/user-attachments/assets/508bd7d7-24df-4856-aac4-cc6c5365def0" />
+Coding Agent 以 OpenCode Desktop、Claude Code CLI、Reasonix、ZCode为例, 模型使用 deepseek-v4-pro  
+
+<img width="2558" height="1387" alt="71726a24445729008ea96a488197291c" src="https://github.com/user-attachments/assets/150d3486-fc39-4f49-a33a-7f0b1a12dde2" />
+
 
 其中ZCode直接传入图片并发送后会报错，此时需要指定图片路径并显式调用 vision-bridge skill。
-<img width="1198" height="798" alt="image" src="https://github.com/user-attachments/assets/748ea696-a2e0-45b3-a3bd-01ea5d962cd8" />
-<img width="1198" height="1094" alt="image" src="https://github.com/user-attachments/assets/b8402be6-99c0-4a84-b61f-b0e07a132765" />
+<img width="1198" height="798" alt="c2a3fc6777875438f5d43452e9103aa9" src="https://github.com/user-attachments/assets/ca3a34b1-02e4-49aa-aa19-3d1b641c2bf8" />
+
+<img width="1198" height="1094" alt="da98544185ad9c6c11e833fc27532250" src="https://github.com/user-attachments/assets/5989f664-bcea-4a35-8d21-8aa1e0f36da2" />
+
+
 
 
 ## 3. 目录结构说明 (Directory Structure)
