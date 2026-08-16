@@ -190,8 +190,26 @@ vision-bridge/
 问题参数可以省略，默认问题为 `请详细描述这张图片的内容`。
 
 
-## 视觉模型  
+## 视觉模型
 
+| 模型厂商 | 模型 | 规格与限制 | 状态 | 实测平均耗时 |
+| --- | --- | --- | --- | --- |
+| 智谱 | `glm-4.6v-flash` | 128K 上下文；图像/视频/文件/文本 | 长期免费，主力推荐 | 9.88s |
+| 智谱 | `glm-4.1v-thinking-flash` | 64K 上下文；图像/视频/文本 | 长期免费 | 2.34s |
+| 智谱 | `glm-4v-flash` | 16K 上下文；单图 ≤5MB | 长期免费，最老 | 未入池 |
+| Gemini | `gemini-3.1-flash-lite` | 1M 上下文；图像/视频/音频/PDF | 免费，2026-05 转正式版 | 1.83s |
+| Gemini | `gemini-3-flash-preview` | 1M 上下文；同上 | 免费，preview 限速较紧 | 5.23s |
+| Gemini | `gemini-2.5-flash` | 1M 上下文；同上 | ⚠️ 2026-10-16 下线 | 新 Key 已 404，不入池 |
+| Gemini | `gemini-2.5-flash-lite` | 1M 上下文；同上 | ⚠️ 2026-10-16 下线 | 同上 |
+| Mistral | `mistral-medium-3.5` | 128K 上下文；图像/文本 | 长期免费 | 3.48s |
+| Mistral | `mistral-medium-latest` | 128K 上下文；图像/文本 | 长期免费 | 4.11s |
+| Mistral | `pixtral-large-2411` | 128K 上下文；图像/文本 | 长期免费层 | 已下线 |
+| Mistral | `pixtral-12b` | 128K 上下文；图像/文本 | 长期免费层 | 已下线 |
+| NVIDIA | `meta/llama-3.2-11b-vision-instruct` | 128K 上下文；图像/文本 | 免费仅限评估，禁生产 | 6.71s |
+| NVIDIA | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | VL 系列规格 | 列表常轮换 | 20.08s |
+| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 128K 上下文；需先发 `agree` | 长期免费 | 17.58s |
+
+规格核对自官方文档；实测于 2026-08-16，以同一标准图对池内 9 个模型各调用 5 次、成功均 5/5，耗时为平均。勘误：Mistral 已下线 pixtral 系列，视觉由 `mistral-medium` 承载；Gemini 2.5 系对新 Key 已返回 404；NVIDIA nano 模型名已改 `-v1` 后缀。池内模型按速度序（快→慢）轮询。
 
 
 ## 图片格式与限制
