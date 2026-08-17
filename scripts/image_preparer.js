@@ -56,7 +56,12 @@ async function canonicalizeBmp(image) {
     if (width !== expected.width || height !== expected.height || decoded.data.length !== width * height * 4) {
       throw new Error('Decoded BMP pixel data does not match the file header');
     }
-    const data = await loadSharp()(Buffer.from(decoded.data), {
+    const pixels = Buffer.from(decoded.data);
+    if (decoded.bitPP === 24) {
+      // bmp-ts represents the absent alpha channel in 24-bit BMPs as zero.
+      for (let index = 3; index < pixels.length; index += 4) pixels[index] = 255;
+    }
+    const data = await loadSharp()(pixels, {
       raw: { width, height, channels: 4 },
       limitInputPixels: MAX_INPUT_PIXELS,
     })
