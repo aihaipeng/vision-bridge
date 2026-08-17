@@ -12,7 +12,7 @@
 
 ### ✨ 项目简介
 
-`vision-bridge` 是面向 Claude Code、Codex、OpenCode、ZCode、Reasonix、OpenClaw 等编码智能体的图像理解 Skill。它接入多家提供免费额度的视觉模型；用户只需向任一支持的 Provider 申请 API Key 并在本地完成配置，即可在免费额度内使用，无需购买付费模型。当前模型无法取得图片内容或不支持图片输入时，`vision-bridge` 可自动调用已配置的视觉模型完成：
+`vision-bridge` 是面向智能体的图像理解 Skill。支持接入多家提供免费额度的视觉模型；用户只需向任一支持的 Provider 申请 API Key 并在本地完成配置，即可在免费额度内使用。当前模型无法取得图片内容或不支持图片输入时，`vision-bridge` 可自动调用已配置的视觉模型完成：
 
 - OCR、代码、表格与界面文字提取
 - 人物、物体、场景、布局和状态描述
