@@ -1,21 +1,23 @@
 const { spawnSync } = require('child_process');
 
 const PROVIDER_KEYS = {
-  gemini: 'GEMINI_API_KEY',
-  zhipu: 'ZHIPU_API_KEY',
-  mistral: 'MISTRAL_API_KEY',
-  nvidia: 'NVIDIA_API_KEY',
-  cloudflare: 'CLOUDFLARE_API_TOKEN',
+  gemini: 'VISION_BRIDGE_GEMINI_API_KEY',
+  zhipu: 'VISION_BRIDGE_ZHIPU_API_KEY',
+  mistral: 'VISION_BRIDGE_MISTRAL_API_KEY',
+  nvidia: 'VISION_BRIDGE_NVIDIA_API_KEY',
+  cloudflare: 'VISION_BRIDGE_CLOUDFLARE_API_TOKEN',
 };
 
 const PROVIDER_EXTRA_KEYS = {
-  cloudflare: 'CLOUDFLARE_ACCOUNT_ID',
+  cloudflare: 'VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID',
 };
 
-function readEnvironmentValue(name) {
-  const userValue = readUserEnvironmentKey(name);
+function readEnvironmentValue(name, options = {}) {
+  const readUser = options.readUserEnvironmentKey || readUserEnvironmentKey;
+  const env = options.env || process.env;
+  const userValue = readUser(name);
   if (userValue) return { value: userValue, source: 'user-env' };
-  const processValue = (process.env[name] || '').trim();
+  const processValue = (env[name] || '').trim();
   if (processValue) return { value: processValue, source: 'env' };
   return { value: '', source: 'missing' };
 }
@@ -30,11 +32,11 @@ function readUserEnvironmentKey(name) {
   return result.status === 0 ? (result.stdout || '').trim() : '';
 }
 
-function resolveCredential(provider) {
-  const { value: key, source } = readEnvironmentValue(PROVIDER_KEYS[provider]);
+function resolveCredential(provider, options = {}) {
+  const { value: key, source } = readEnvironmentValue(PROVIDER_KEYS[provider], options);
   const extraEnvName = PROVIDER_EXTRA_KEYS[provider];
   const extra = extraEnvName
-    ? { envName: extraEnvName, ...readEnvironmentValue(extraEnvName) }
+    ? { envName: extraEnvName, ...readEnvironmentValue(extraEnvName, options) }
     : undefined;
   return { provider, key, source, extra };
 }
@@ -42,6 +44,7 @@ function resolveCredential(provider) {
 module.exports = {
   PROVIDER_EXTRA_KEYS,
   PROVIDER_KEYS,
+  readEnvironmentValue,
   readUserEnvironmentKey,
   resolveCredential,
 };

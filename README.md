@@ -53,37 +53,37 @@ npm run doctor
 
 | Provider | 环境变量 | 注册地址 |
 |---|---|---|
-| 智谱 | `ZHIPU_API_KEY` | [BigModel](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) |
-| Gemini | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
-| Mistral | `MISTRAL_API_KEY` | [Mistral Console](https://console.mistral.ai/api-keys/) |
-| NVIDIA | `NVIDIA_API_KEY` | [NVIDIA Build](https://build.nvidia.com) |
-| Cloudflare | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) |
+| 智谱 | `VISION_BRIDGE_ZHIPU_API_KEY` | [BigModel](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) |
+| Gemini | `VISION_BRIDGE_GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+| Mistral | `VISION_BRIDGE_MISTRAL_API_KEY` | [Mistral Console](https://console.mistral.ai/api-keys/) |
+| NVIDIA | `VISION_BRIDGE_NVIDIA_API_KEY` | [NVIDIA Build](https://build.nvidia.com) |
+| Cloudflare | `VISION_BRIDGE_CLOUDFLARE_API_TOKEN` + `VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID` | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) |
 
 Windows CMD：
 
 ```cmd
-setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
-setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
-setx MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
-setx NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
-setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
-setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
+setx VISION_BRIDGE_ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
+setx VISION_BRIDGE_GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
+setx VISION_BRIDGE_MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
+setx VISION_BRIDGE_NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
+setx VISION_BRIDGE_CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
+setx VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
 npm run doctor
 ```
 
 macOS Bash/zsh：
 
 ```bash
-export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
-export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
-export MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
-export NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
-export CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
-export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
+export VISION_BRIDGE_ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
+export VISION_BRIDGE_GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+export VISION_BRIDGE_MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
+export VISION_BRIDGE_NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
+export VISION_BRIDGE_CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
+export VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 npm run doctor
 ```
 
-不要在聊天、命令参数或标准输入中发送 Key。Windows 的 `setx` 不更新已运行进程，但脚本会读取用户级持久化环境变量。
+不要在聊天、命令参数或标准输入中发送 Key。`VISION_BRIDGE_*` 命名空间可避免 Pi、CC Switch 等工具按厂商公共变量名自动发现凭据，但它不是加密凭据库。Windows 的 `setx` 不更新已运行进程，但脚本会读取用户级持久化环境变量。
 
 ### 🖼️ 输入与图片格式
 
@@ -174,27 +174,6 @@ node scripts/recover_session_images.js --client auto --cwd "C:/current/workspace
 
 模型可用性、免费额度和目录会随 Provider 调整，完整限制见 [`references/provider_limits.md`](references/provider_limits.md)。
 
-### 🎬 调用示例
-
-以下截图来自 OpenCode TUI、Claude Code CLI、Codex、Reasonix、ZCode 和 OpenClaw Windows Companion 等客户端：
-
-<img width="1280" alt="vision-bridge example 1" src="https://github.com/user-attachments/assets/0439daea-e95f-42fd-86bf-e413903bdbfe" />
-
-<img width="1280" alt="vision-bridge example 2" src="https://github.com/user-attachments/assets/91091fd8-7176-45fb-b4c1-409a75408258" />
-
-### 🧯 常见问题
-
-| 问题 | 处理方式 |
-|---|---|
-| 模型提示不支持图片 | 明确要求调用 `vision-bridge`，并提供真实路径、公开 URL、附件或剪贴板输入 |
-| 多图漏图或顺序错误 | 使用 `describe_images.js` 和有序 JSON 清单 |
-| 只有附件显示名 | 先运行 `recover_session_images.js`，不要扫描目录猜测文件 |
-| `DEPENDENCY` | 在 Skill 目录运行 `npm ci --omit=dev` |
-| `KEY_REQUIRED` | 在本机配置至少一个 Provider Key，再运行 `npm run doctor` |
-| `NETWORK_UNAVAILABLE` | 检查出站网络、`HTTPS_PROXY`、`HTTP_PROXY` 与 `NO_PROXY` |
-
-完整恢复步骤见 [`references/troubleshooting.md`](references/troubleshooting.md)。
-
 ### 📚 参考资料
 
 - [Skill 工作流](SKILL.md)
@@ -253,37 +232,37 @@ npm run doctor
 
 | Provider | Environment variables | Registration page |
 |---|---|---|
-| Zhipu | `ZHIPU_API_KEY` | [BigModel](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) |
-| Gemini | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
-| Mistral | `MISTRAL_API_KEY` | [Mistral Console](https://console.mistral.ai/api-keys/) |
-| NVIDIA | `NVIDIA_API_KEY` | [NVIDIA Build](https://build.nvidia.com) |
-| Cloudflare | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) |
+| Zhipu | `VISION_BRIDGE_ZHIPU_API_KEY` | [BigModel](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) |
+| Gemini | `VISION_BRIDGE_GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+| Mistral | `VISION_BRIDGE_MISTRAL_API_KEY` | [Mistral Console](https://console.mistral.ai/api-keys/) |
+| NVIDIA | `VISION_BRIDGE_NVIDIA_API_KEY` | [NVIDIA Build](https://build.nvidia.com) |
+| Cloudflare | `VISION_BRIDGE_CLOUDFLARE_API_TOKEN` + `VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID` | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) |
 
 Windows CMD:
 
 ```cmd
-setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
-setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
-setx MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
-setx NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
-setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
-setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
+setx VISION_BRIDGE_ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
+setx VISION_BRIDGE_GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
+setx VISION_BRIDGE_MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
+setx VISION_BRIDGE_NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
+setx VISION_BRIDGE_CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
+setx VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
 npm run doctor
 ```
 
 macOS Bash/zsh:
 
 ```bash
-export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
-export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
-export MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
-export NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
-export CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
-export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
+export VISION_BRIDGE_ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
+export VISION_BRIDGE_GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+export VISION_BRIDGE_MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
+export VISION_BRIDGE_NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
+export VISION_BRIDGE_CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
+export VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 npm run doctor
 ```
 
-Never send Keys through chat, command arguments, or standard input. Windows `setx` does not update running processes, but the scripts read persisted user-scoped environment variables.
+Never send Keys through chat, command arguments, or standard input. The `VISION_BRIDGE_*` namespace prevents tools such as Pi and CC Switch from auto-discovering credentials under vendor-standard names, but it is not an encrypted credential vault. Windows `setx` does not update running processes, but the scripts read persisted user-scoped environment variables.
 
 ### 🖼️ Inputs and Image Formats
 
@@ -373,27 +352,6 @@ Continue with each `images[].path` from the returned JSON. On `SESSION_AMBIGUOUS
 | Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | Some networks require a proxy |
 
 Provider catalogs, free tiers, and model availability can change. See [`references/provider_limits.md`](references/provider_limits.md) for complete limits.
-
-### 🎬 Examples
-
-The screenshots below show usage from clients including OpenCode TUI, Claude Code CLI, Codex, Reasonix, ZCode, and OpenClaw Windows Companion:
-
-<img width="1280" alt="vision-bridge example 1" src="https://github.com/user-attachments/assets/0439daea-e95f-42fd-86bf-e413903bdbfe" />
-
-<img width="1280" alt="vision-bridge example 2" src="https://github.com/user-attachments/assets/91091fd8-7176-45fb-b4c1-409a75408258" />
-
-### 🧯 Troubleshooting
-
-| Problem | Action |
-|---|---|
-| The model reports unsupported image input | Explicitly request `vision-bridge` and provide a real path, public URL, attachment, or clipboard input |
-| A multi-image request misses items or changes order | Use `describe_images.js` with an ordered JSON manifest |
-| Only an attachment display name is available | Run `recover_session_images.js`; do not scan directories and guess |
-| `DEPENDENCY` | Run `npm ci --omit=dev` in the Skill directory |
-| `KEY_REQUIRED` | Configure at least one Provider Key locally, then run `npm run doctor` |
-| `NETWORK_UNAVAILABLE` | Check outbound access, `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY` |
-
-See [`references/troubleshooting.md`](references/troubleshooting.md) for the complete recovery guide.
 
 ### 📚 References
 

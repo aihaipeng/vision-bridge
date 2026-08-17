@@ -141,7 +141,7 @@ New-style string `code` values coexist in the same documentation: `invalid_reque
 | **Network unreachable** | Request-layer failures: TLS disconnect, ECONNRESET, timeout; direct Mistral access from mainland China is a common example | provider | Trip circuit -> next Provider; if every failure is NETWORK, return **NETWORK_UNAVAILABLE** |
 | **Invalid request / input** | 400/413/422: malformed payload, image limit exceeded, parameter validation, content safety block such as Zhipu 1301, CF 3030 | provider | Trip circuit -> next Provider. The unified gateway should normally prevent this; occurrence suggests Provider-side incompatibility |
 | **Invalid response** | HTTP 200 with empty or non-JSON content | model | Advance to the next model from the same Provider |
-| **Missing configuration** | CF lacks CLOUDFLARE_ACCOUNT_ID | provider | Skip before entering the pool with `PROVIDER_SKIPPED`; this is not counted as a failure |
+| **Missing configuration** | CF lacks VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID | provider | Skip before entering the pool with `PROVIDER_SKIPPED`; this is not counted as a failure |
 
 ### Terminal aggregation after all Providers are exhausted
 

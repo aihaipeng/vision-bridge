@@ -112,7 +112,7 @@ function failureDetails(model, error) {
 
 async function describe({ image, prompt, key, accountId, models = DEFAULT_MODELS, model, fetchImpl, onStatus, fallbackTarget, signal }) {
   if (!accountId) {
-    throw new ProviderError(PROVIDER, 'CONFIG', 'Cloudflare is missing CLOUDFLARE_ACCOUNT_ID and cannot construct the API URL', { scope: 'provider' });
+    throw new ProviderError(PROVIDER, 'CONFIG', 'Cloudflare is missing VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID and cannot construct the API URL', { scope: 'provider' });
   }
   const modelSequence = model ? [model] : models;
   const prepared = await prepareImage(image, IMAGE_PROFILE);

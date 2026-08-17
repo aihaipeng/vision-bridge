@@ -43,7 +43,7 @@ The router maintains cross-process model health in `%TEMP%\vision_bridge_health.
 
 ## Fixed order and circuit breaking
 
-The script checks all credentials first. Cloudflare also requires `CLOUDFLARE_ACCOUNT_ID`. Only configured Providers enter the queue. The Provider order favors direct regional access; each pool uses measured fast-to-slow order. User prompts cannot change this order.
+The script checks all namespaced credentials first. Cloudflare also requires `VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID`. Only configured Providers enter the queue. Vendor-standard credential names are deliberately ignored to prevent unrelated tools from auto-discovering vision-bridge credentials. The Provider order favors direct regional access; each pool uses measured fast-to-slow order. User prompts cannot change this order.
 
 1. `glm-4.1v-thinking-flash` (measured average 2.34s)
 2. `glm-4.6v-flash` (9.88s; free-tier concurrency slows peak periods)
@@ -89,7 +89,12 @@ Cloudflare sends an idempotent `{"prompt":"agree"}` request to the run endpoint 
 | `MISTRAL_MODELS` | Comma-separated Mistral fallback order |
 | `NVIDIA_MODELS` | Comma-separated NVIDIA fallback order |
 | `CLOUDFLARE_MODELS` | Comma-separated Cloudflare fallback order |
-| `CLOUDFLARE_ACCOUNT_ID` | Required with `CLOUDFLARE_API_TOKEN` |
+| `VISION_BRIDGE_ZHIPU_API_KEY` | Zhipu credential used only by vision-bridge |
+| `VISION_BRIDGE_GEMINI_API_KEY` | Gemini credential used only by vision-bridge |
+| `VISION_BRIDGE_MISTRAL_API_KEY` | Mistral credential used only by vision-bridge |
+| `VISION_BRIDGE_NVIDIA_API_KEY` | NVIDIA credential used only by vision-bridge |
+| `VISION_BRIDGE_CLOUDFLARE_API_TOKEN` | Cloudflare token used only by vision-bridge |
+| `VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID` | Required with `VISION_BRIDGE_CLOUDFLARE_API_TOKEN` |
 | `VISION_API_TIMEOUT_MS` | Per-Provider request timeout; default 30000 ms |
 | `VISION_BRIDGE_MAX_BATCH_ITEMS` | Maximum batch size; default 3; checked before preflight and reads |
 | `VISION_BRIDGE_ACQUIRE_CONCURRENCY` | Acquisition and standardization concurrency; default 1; range 1-32 |

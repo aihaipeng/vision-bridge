@@ -92,7 +92,7 @@ async function main() {
     }
   }
   if (!providers.some(({ configured }) => configured)) {
-    process.stderr.write('[ERROR] KEY_REQUIRED: Configure at least one Provider Key (ZHIPU_API_KEY, GEMINI_API_KEY, MISTRAL_API_KEY, NVIDIA_API_KEY, or CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID), then run npm run doctor again\n');
+    process.stderr.write('[ERROR] KEY_REQUIRED: Configure at least one Provider Key (VISION_BRIDGE_ZHIPU_API_KEY, VISION_BRIDGE_GEMINI_API_KEY, VISION_BRIDGE_MISTRAL_API_KEY, VISION_BRIDGE_NVIDIA_API_KEY, or VISION_BRIDGE_CLOUDFLARE_API_TOKEN + VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID), then run npm run doctor again\n');
     if (exitCode === 0) exitCode = 2;
   }
   process.exitCode = exitCode;

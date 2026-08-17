@@ -68,11 +68,11 @@ Do not repeat installation before every image request.
 
 Supported variables:
 
-- `ZHIPU_API_KEY`
-- `GEMINI_API_KEY`
-- `MISTRAL_API_KEY`
-- `NVIDIA_API_KEY`
-- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (Cloudflare is enabled only when both are configured)
+- `VISION_BRIDGE_ZHIPU_API_KEY`
+- `VISION_BRIDGE_GEMINI_API_KEY`
+- `VISION_BRIDGE_MISTRAL_API_KEY`
+- `VISION_BRIDGE_NVIDIA_API_KEY`
+- `VISION_BRIDGE_CLOUDFLARE_API_TOKEN` + `VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID` (Cloudflare is enabled only when both are configured)
 
 Registration pages:
 
@@ -85,28 +85,28 @@ Registration pages:
 Never ask users to send Keys in chat, and never pass a Key supplied by a user through standard input or command arguments. Windows users should set user-scoped environment variables in their own terminal:
 
 ```cmd
-setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
-setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
-setx MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
-setx NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
-setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
-setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
+setx VISION_BRIDGE_ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
+setx VISION_BRIDGE_GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
+setx VISION_BRIDGE_MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
+setx VISION_BRIDGE_NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
+setx VISION_BRIDGE_CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
+setx VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
 ```
 
 `setx` does not modify already-running processes. The scripts directly read persisted user-scoped values, so they can be invoked again in the current session.
 macOS users should configure process environment variables in the same shell environment that launches the Agent:
 
 ```bash
-export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
-export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
-export MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
-export NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
-export CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
-export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
+export VISION_BRIDGE_ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
+export VISION_BRIDGE_GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+export VISION_BRIDGE_MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
+export VISION_BRIDGE_NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
+export VISION_BRIDGE_CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
+export VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 npm run doctor
 ```
 
-After setting or updating a value on Windows, run `npm run doctor` directly. The script reads user environment variables, so the Agent does not need to restart. On macOS, the Agent process must inherit the variables above. Retry image recognition after doctor reports at least one `API_KEY: configured`. The scripts do not accept Keys through standard input or command arguments and do not persist them automatically.
+After setting or updating a value on Windows, run `npm run doctor` directly. The script reads user environment variables, so the Agent does not need to restart. On macOS, the Agent process must inherit the variables above. Retry image recognition after doctor reports at least one namespaced Key as configured. The scripts ignore vendor-standard credential variables so unrelated tools cannot auto-discover vision-bridge credentials. They do not accept Keys through standard input or command arguments and do not persist them automatically.
 
 ## CLI Clipboard Compatibility
 

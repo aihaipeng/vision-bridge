@@ -187,7 +187,7 @@ The task is complete only when every readable image has been processed, the user
 - Read `references/provider-error-codes.md` when interpreting specific Provider error codes or failure-scope decisions.
 - Do not load every reference unconditionally.
 
-Requirements: Windows 10/11 or macOS, Node.js 20.9+, npm, outbound access to at least one Provider API, and at least one configured credential: `ZHIPU_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `NVIDIA_API_KEY`, or `CLOUDFLARE_API_TOKEN` plus `CLOUDFLARE_ACCOUNT_ID`.
+Requirements: Windows 10/11 or macOS, Node.js 20.9+, npm, outbound access to at least one Provider API, and at least one configured credential: `VISION_BRIDGE_ZHIPU_API_KEY`, `VISION_BRIDGE_GEMINI_API_KEY`, `VISION_BRIDGE_MISTRAL_API_KEY`, `VISION_BRIDGE_NVIDIA_API_KEY`, or `VISION_BRIDGE_CLOUDFLARE_API_TOKEN` plus `VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID`. Do not use the vendors' shared environment-variable names; the namespace prevents unrelated tools from auto-discovering these credentials.
 
 After modifying this skill or its scripts, run:
 

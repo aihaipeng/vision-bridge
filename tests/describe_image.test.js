@@ -52,7 +52,7 @@ test('keyRequiredError retains exit code and local configuration guidance', () =
 
   assert.equal(error.code, 'KEY_REQUIRED');
   assert.equal(error.exitCode, 2);
-  assert.match(error.message, /ZHIPU_API_KEY/);
+  assert.match(error.message, /VISION_BRIDGE_ZHIPU_API_KEY/);
   assert.match(error.message, /Do not send Keys in chat/);
 });
 
