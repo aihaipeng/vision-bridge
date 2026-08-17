@@ -12,13 +12,11 @@
 
 ### ✨ 项目简介
 
-`vision-bridge` 是面向智能体的图像理解 Skill。支持接入多家提供免费额度的视觉模型；用户只需向任一支持的 Provider 申请 API Key 并在本地完成配置，即可在免费额度内使用。当前模型无法取得图片内容或不支持图片输入时，`vision-bridge` 可自动调用已配置的视觉模型完成：
+**Vision-Bridge** 是一款面向智能体的图像理解插件。它支持接入多家提供免费额度的视觉模型。当主模型不支持或无法读取图片时，系统会自动调用已配置的第三方视觉模型完成解析。
 
 - OCR、代码、表格与界面文字提取
 - 人物、物体、场景、布局和状态描述
 - 截图、图表、流程图、文档影像和错误信息分析
-
-仅在用户明确要求使用 `vision-bridge`，或当前模型无法读取图片时调用。普通可直接看图的请求应由当前 Agent 原生处理。
 
 ### 🚀 快速开始
 
@@ -135,8 +133,6 @@ npm run doctor
 - OCR and extraction of code, tables, interface text, and document structure
 - Descriptions of people, objects, scenes, layouts, and UI states
 - Analysis of screenshots, charts, diagrams, document images, and error messages
-
-Use it only when the user explicitly requests `vision-bridge` or the active model cannot read the image. Let the current Agent handle ordinary image requests when native vision is available.
 
 ### 🚀 Quick Start
 
