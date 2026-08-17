@@ -17,7 +17,6 @@
 - OCR、代码、表格与界面文字提取
 - 人物、物体、场景、布局和状态描述
 - 截图、图表、流程图、文档影像和错误信息分析
-- 多图比较、内容去重、逐项结果与失败恢复
 
 仅在用户明确要求使用 `vision-bridge`，或当前模型无法读取图片时调用。普通可直接看图的请求应由当前 Agent 原生处理。
 
@@ -85,8 +84,6 @@ export VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 npm run doctor
 ```
 
-不要在聊天、命令参数或标准输入中发送 Key。`VISION_BRIDGE_*` 命名空间可避免 Pi、CC Switch 等工具按厂商公共变量名自动发现凭据，但它不是加密凭据库。Windows 的 `setx` 不更新已运行进程，但脚本会读取用户级持久化环境变量。
-
 ### 🖼️ 输入与图片格式
 
 | 输入来源 | 示例 | 说明 |
@@ -138,7 +135,6 @@ npm run doctor
 - OCR and extraction of code, tables, interface text, and document structure
 - Descriptions of people, objects, scenes, layouts, and UI states
 - Analysis of screenshots, charts, diagrams, document images, and error messages
-- Ordered multi-image comparison, deduplication, partial results, and failure recovery
 
 Use it only when the user explicitly requests `vision-bridge` or the active model cannot read the image. Let the current Agent handle ordinary image requests when native vision is available.
 
@@ -203,8 +199,6 @@ export VISION_BRIDGE_CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
 export VISION_BRIDGE_CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 npm run doctor
 ```
-
-Never send Keys through chat, command arguments, or standard input. The `VISION_BRIDGE_*` namespace prevents tools such as Pi and CC Switch from auto-discovering credentials under vendor-standard names, but it is not an encrypted credential vault. Windows `setx` does not update running processes, but the scripts read persisted user-scoped environment variables.
 
 ### 🖼️ Inputs and Image Formats
 
