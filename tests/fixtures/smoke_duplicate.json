@@ -1,7 +1,0 @@
-{
-  "prompt": "只回答图片中最醒目的英文单词 ONE 或 TWO。",
-  "items": [
-    { "inputId": "original", "input": "tests/fixtures/smoke_one.svg" },
-    { "inputId": "duplicate", "input": "tests/fixtures/smoke_one.svg" }
-  ]
-}

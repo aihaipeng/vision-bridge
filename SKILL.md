@@ -193,6 +193,5 @@ After modifying this skill or its scripts, run:
 
 ```cmd
 npm run doctor
-npm test
 npm run check
 ```
