@@ -12,7 +12,7 @@
 
 ### ✨ 项目简介
 
-`vision-bridge` 是面向 Claude Code、Codex、OpenCode、ZCode、Reasonix、OpenClaw 等编码智能体的图像理解 Skill。当前模型无法取得图片内容或不支持图片输入时，它可通过已配置的视觉模型完成：
+`vision-bridge` 是面向 Claude Code、Codex、OpenCode、ZCode、Reasonix、OpenClaw 等编码智能体的图像理解 Skill。它接入多家提供免费额度的视觉模型；用户只需向任一支持的 Provider 申请 API Key 并在本地完成配置，即可在免费额度内使用，无需购买付费模型。当前模型无法取得图片内容或不支持图片输入时，`vision-bridge` 可自动调用已配置的视觉模型完成：
 
 - OCR、代码、表格与界面文字提取
 - 人物、物体、场景、布局和状态描述
@@ -191,7 +191,7 @@ node scripts/recover_session_images.js --client auto --cwd "C:/current/workspace
 
 ### ✨ Overview
 
-`vision-bridge` is an image-understanding Skill for coding agents such as Claude Code, Codex, OpenCode, ZCode, Reasonix, and OpenClaw. When the active model cannot access an image or does not support image input, the Skill uses configured vision models for:
+`vision-bridge` is an image-understanding Skill for coding agents such as Claude Code, Codex, OpenCode, ZCode, Reasonix, and OpenClaw. It connects to vision models with free tiers: users only need to obtain an API Key from any supported Provider and configure it locally, with no paid model subscription required within that Provider's free quota. When the active model cannot access an image or does not support image input, `vision-bridge` automatically uses the configured vision models for:
 
 - OCR and extraction of code, tables, interface text, and document structure
 - Descriptions of people, objects, scenes, layouts, and UI states
