@@ -1,0 +1,8 @@
+{
+  "prompt": "只回答图片中最醒目的英文数字单词 ONE、TWO 或 THREE。",
+  "items": [
+    "tests/fixtures/smoke_one.svg",
+    "tests/fixtures/smoke_two.svg",
+    "tests/fixtures/smoke_three.svg"
+  ]
+}

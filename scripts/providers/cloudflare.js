@@ -1,12 +1,14 @@
 const { prepareImage } = require('../image_preparer');
 const { ProviderError, providerFailureScope, singleLine } = require('../errors');
 const { fetchWithTimeout } = require('./http');
+const { encodeDataUrl } = require('../image_codec');
+const { isBatchCancelled } = require('../workflow/cancellation');
 
 const PROVIDER = 'cloudflare';
 const DEFAULT_MODELS = ['@cf/meta/llama-3.2-11b-vision-instruct'];
 const DEFAULT_MODEL = DEFAULT_MODELS[0];
 const IMAGE_PROFILE = {
-  label: 'Cloudflare 视觉模型',
+  label: 'Cloudflare vision model',
   maxBytes: 3_500_000,
   maxDimension: 4096,
   allowedMimes: ['image/jpeg', 'image/png'],
@@ -19,23 +21,25 @@ function runUrl(accountId, model) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model.split('/').map(encodeURIComponent).join('/')}`;
 }
 
-async function agreeTerms({ accountId, model, key, fetchImpl }) {
+async function agreeTerms({ accountId, model, key, fetchImpl, signal }) {
   let response;
   try {
     response = await fetchWithTimeout(fetchImpl, runUrl(accountId, model), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ prompt: 'agree' }),
+      signal,
     });
   } catch (error) {
-    throw new ProviderError(PROVIDER, 'NETWORK', `Cloudflare 条款同意请求失败: ${singleLine(error.message || error)}`, {
+    if (isBatchCancelled(error)) throw error;
+    throw new ProviderError(PROVIDER, 'NETWORK', `Cloudflare agreement request failed: ${singleLine(error.message || error)}`, {
       model, retryable: true, cause: error,
     });
   }
   const raw = await response.text();
   if (response.status === 401 || response.status === 403) {
     if (/thank you for agreeing|you may now use/i.test(raw)) return;
-    throw new ProviderError(PROVIDER, 'AUTH', `Cloudflare API token 无效、已失效或无权访问（HTTP ${response.status}）`, {
+    throw new ProviderError(PROVIDER, 'AUTH', `Cloudflare API token is invalid, expired, or unauthorized (HTTP ${response.status})`, {
       model, status: response.status, auth: true,
     });
   }
@@ -43,7 +47,7 @@ async function agreeTerms({ accountId, model, key, fetchImpl }) {
 
 function extractText(data, model) {
   if (data && data.success === false && Array.isArray(data.errors)) {
-    throw new ProviderError(PROVIDER, 'HTTP', `Cloudflare 模型 ${model} 调用失败: ${singleLine(data.errors[0] && data.errors[0].message)}`, { model });
+    throw new ProviderError(PROVIDER, 'HTTP', `Cloudflare model ${model} call failed: ${singleLine(data.errors[0] && data.errors[0].message)}`, { model });
   }
   const content = data && data.choices && data.choices[0]
     && data.choices[0].message && data.choices[0].message.content;
@@ -54,25 +58,27 @@ function extractText(data, model) {
   }
   const response = data && data.result && data.result.response;
   if (typeof response === 'string' && response) return response;
-  throw new ProviderError(PROVIDER, 'INVALID_RESPONSE', `Cloudflare 模型 ${model} 返回了空响应`, { model });
+  throw new ProviderError(PROVIDER, 'INVALID_RESPONSE', `Cloudflare model ${model} returned an empty response`, { model });
 }
 
-async function requestModel({ model, payload, key, accountId, fetchImpl }) {
+async function requestModel({ model, payload, key, accountId, fetchImpl, signal }) {
   let response;
   try {
     response = await fetchWithTimeout(fetchImpl, runUrl(accountId, model), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(payload),
+      signal,
     });
   } catch (error) {
-    throw new ProviderError(PROVIDER, 'NETWORK', `Cloudflare 网络请求失败: ${singleLine(error.message || error)}`, {
+    if (isBatchCancelled(error)) throw error;
+    throw new ProviderError(PROVIDER, 'NETWORK', `Cloudflare network request failed: ${singleLine(error.message || error)}`, {
       model, retryable: true, cause: error,
     });
   }
   const raw = await response.text();
   if (response.status === 401 || response.status === 403) {
-    throw new ProviderError(PROVIDER, 'AUTH', `Cloudflare API token 无效、已失效或无权访问（HTTP ${response.status}）`, {
+    throw new ProviderError(PROVIDER, 'AUTH', `Cloudflare API token is invalid, expired, or unauthorized (HTTP ${response.status})`, {
       model, status: response.status, auth: true,
     });
   }
@@ -80,14 +86,14 @@ async function requestModel({ model, payload, key, accountId, fetchImpl }) {
   if (!response.ok) {
     const modelNotFound = response.status === 404
       || /model.*not\s*found|no\s+such\s+model|unknown\s+model/i.test(raw);
-    throw new ProviderError(PROVIDER, modelNotFound ? 'MODEL_NOT_FOUND' : 'HTTP', `Cloudflare 模型 ${model} 调用失败（HTTP ${response.status}）: ${singleLine(raw).slice(0, 300)}`, {
+    throw new ProviderError(PROVIDER, modelNotFound ? 'MODEL_NOT_FOUND' : 'HTTP', `Cloudflare model ${model} call failed (HTTP ${response.status}): ${singleLine(raw).slice(0, 300)}`, {
       model, status: response.status, retryable, scope: modelNotFound ? 'model' : undefined,
     });
   }
   let data;
   try { data = JSON.parse(raw); }
   catch (error) {
-    throw new ProviderError(PROVIDER, 'INVALID_JSON', `Cloudflare 模型 ${model} 返回了非 JSON 响应`, { model, cause: error });
+    throw new ProviderError(PROVIDER, 'INVALID_JSON', `Cloudflare model ${model} returned a non-JSON response`, { model, cause: error });
   }
   return extractText(data, model);
 }
@@ -104,12 +110,13 @@ function failureDetails(model, error) {
   };
 }
 
-async function describe({ image, prompt, key, accountId, models = DEFAULT_MODELS, model, fetchImpl, onStatus, fallbackTarget }) {
+async function describe({ image, prompt, key, accountId, models = DEFAULT_MODELS, model, fetchImpl, onStatus, fallbackTarget, signal }) {
   if (!accountId) {
-    throw new ProviderError(PROVIDER, 'CONFIG', 'Cloudflare 缺少 CLOUDFLARE_ACCOUNT_ID,无法构造 API URL', { scope: 'provider' });
+    throw new ProviderError(PROVIDER, 'CONFIG', 'Cloudflare is missing CLOUDFLARE_ACCOUNT_ID and cannot construct the API URL', { scope: 'provider' });
   }
   const modelSequence = model ? [model] : models;
   const prepared = await prepareImage(image, IMAGE_PROFILE);
+  const imageUrl = encodeDataUrl(prepared);
   const failures = [];
   for (let index = 0; index < modelSequence.length; index += 1) {
     const currentModel = modelSequence[index];
@@ -118,17 +125,18 @@ async function describe({ image, prompt, key, accountId, models = DEFAULT_MODELS
       messages: [{
         role: 'user',
         content: [
-          { type: 'image_url', image_url: { url: `data:${prepared.mime};base64,${prepared.data.toString('base64')}` } },
+          { type: 'image_url', image_url: { url: imageUrl } },
           { type: 'text', text: prompt },
         ],
       }],
       max_tokens: 1024,
     };
     try {
-      await agreeTerms({ accountId, model: currentModel, key, fetchImpl });
-      const text = await requestModel({ model: currentModel, payload, key, accountId, fetchImpl });
+      await agreeTerms({ accountId, model: currentModel, key, fetchImpl, signal });
+      const text = await requestModel({ model: currentModel, payload, key, accountId, fetchImpl, signal });
       return { text, model: currentModel, provider: PROVIDER };
     } catch (error) {
+      if (isBatchCancelled(error)) throw error;
       const failure = failureDetails(currentModel, error);
       failures.push(failure);
       const next = failure.scope === 'provider'
@@ -139,13 +147,13 @@ async function describe({ image, prompt, key, accountId, models = DEFAULT_MODELS
         : (next ? 'model_switch' : 'model_failed');
       if (onStatus) onStatus({ type, ...failure, next });
       if (failure.scope === 'provider') {
-        throw new ProviderError(PROVIDER, 'PROVIDER_UNAVAILABLE', `${currentModel} 发生 Provider 级故障: ${failure.message}`, {
+        throw new ProviderError(PROVIDER, 'PROVIDER_UNAVAILABLE', `${currentModel} had a Provider-level failure: ${failure.message}`, {
           failures,
         });
       }
     }
   }
-  throw new ProviderError(PROVIDER, 'MODELS_FAILED', `所有 Cloudflare 模型均失败: ${failures.map((item) => `${item.model}: ${item.message}`).join(' | ')}`, {
+  throw new ProviderError(PROVIDER, 'MODELS_FAILED', `All Cloudflare models failed: ${failures.map((item) => `${item.model}: ${item.message}`).join(' | ')}`, {
     failures,
   });
 }

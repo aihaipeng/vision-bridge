@@ -17,7 +17,7 @@ function loadSharp() {
     sharpModule = require('sharp');
     return sharpModule;
   } catch (error) {
-    throw new ImagePreparationError('未找到或无法加载 sharp 依赖，请在 vision-bridge 目录执行 npm install', error);
+    throw new ImagePreparationError('The sharp dependency is missing or cannot be loaded; run npm install in the vision-bridge directory', error);
   }
 }
 
@@ -27,7 +27,7 @@ function loadBmp() {
     bmpModule = require('bmp-ts');
     return bmpModule;
   } catch (error) {
-    throw new ImagePreparationError('未找到或无法加载 bmp-ts 依赖，请在 vision-bridge 目录执行 npm install', error);
+    throw new ImagePreparationError('The bmp-ts dependency is missing or cannot be loaded; run npm install in the vision-bridge directory', error);
   }
 }
 
@@ -40,9 +40,9 @@ function bmpDimensions(data) {
   const width = headerSize === 12 ? data.readUInt16LE(18) : data.readInt32LE(18);
   const signedHeight = headerSize === 12 ? data.readUInt16LE(20) : data.readInt32LE(22);
   const height = Math.abs(signedHeight);
-  if (width <= 0 || height <= 0) throw new ImagePreparationError('BMP 图片尺寸无效');
+  if (width <= 0 || height <= 0) throw new ImagePreparationError('Invalid BMP dimensions');
   if (width * height > MAX_INPUT_PIXELS) {
-    throw new ImagePreparationError(`BMP 图片像素数超过 ${MAX_INPUT_PIXELS} 上限`);
+    throw new ImagePreparationError(`BMP pixel count exceeds the ${MAX_INPUT_PIXELS} limit`);
   }
   return { width, height };
 }
@@ -54,7 +54,7 @@ async function canonicalizeBmp(image) {
     const width = Math.abs(decoded.width);
     const height = Math.abs(decoded.height);
     if (width !== expected.width || height !== expected.height || decoded.data.length !== width * height * 4) {
-      throw new Error('解码后的 BMP 像素数据与文件头不一致');
+      throw new Error('Decoded BMP pixel data does not match the file header');
     }
     const data = await loadSharp()(Buffer.from(decoded.data), {
       raw: { width, height, channels: 4 },
@@ -65,7 +65,7 @@ async function canonicalizeBmp(image) {
     return { ...image, data, mime: 'image/png' };
   } catch (error) {
     if (error instanceof ImagePreparationError) throw error;
-    throw new ImagePreparationError(`BMP 图片解码失败: ${error.message || error}`, error);
+    throw new ImagePreparationError(`BMP decoding failed: ${error.message || error}`, error);
   }
 }
 
@@ -83,8 +83,14 @@ async function metadataFor(image) {
     return await loadSharp()(image.data, inputOptions()).metadata();
   } catch (error) {
     if (error instanceof ImagePreparationError) throw error;
-    throw new ImagePreparationError(`无法读取图片元数据: ${error.message || error}`, error);
+    throw new ImagePreparationError(`Unable to read image metadata: ${error.message || error}`, error);
   }
+}
+
+async function readImageDimensions(image) {
+  const metadata = await metadataFor(image);
+  if (!metadata.width || !metadata.height) throw new ImagePreparationError('Unable to read image dimensions');
+  return { width: metadata.width, height: metadata.height };
 }
 
 function needsAutoOrient(metadata) {
@@ -102,7 +108,7 @@ async function normalizeCanonicalOrientation(image, metadata) {
 
 async function canonicalizeImage(image) {
   if (!image || !Buffer.isBuffer(image.data) || image.data.length === 0) {
-    throw new ImagePreparationError('图片数据为空或无效');
+    throw new ImagePreparationError('Image data is empty or invalid');
   }
   if (isBmp(image.data)) return canonicalizeBmp(image);
 
@@ -111,12 +117,12 @@ async function canonicalizeImage(image) {
     metadata = await metadataFor(image);
   } catch (error) {
     if (error instanceof ImagePreparationError) {
-      throw new ImagePreparationError(`无法解码图片: ${error.message.replace(/^无法读取图片元数据:\s*/, '')}`, error);
+      throw new ImagePreparationError(`Unable to decode image: ${error.message.replace(/^Unable to read image metadata:\s*/, '')}`, error);
     }
     throw error;
   }
   if (!metadata.width || !metadata.height || !metadata.format) {
-    throw new ImagePreparationError('无法解码图片或读取有效尺寸');
+    throw new ImagePreparationError('Unable to decode the image or read valid dimensions');
   }
 
   if (metadata.format === 'jpeg') {
@@ -151,7 +157,7 @@ async function canonicalizeImage(image) {
       mime: 'image/jpeg',
     };
   } catch (error) {
-    throw new ImagePreparationError(`图片转换为标准格式失败: ${error.message || error}`, error);
+    throw new ImagePreparationError(`Failed to convert image to a standard format: ${error.message || error}`, error);
   }
 }
 
@@ -169,12 +175,12 @@ function compressionCandidates(metadata, profile) {
   const candidates = [];
   for (const entry of profile.compressionProfiles) {
     if (!Array.isArray(entry) || entry.length !== 2) {
-      throw new ImagePreparationError('图片压缩档位配置无效');
+      throw new ImagePreparationError('Invalid image compression tier configuration');
     }
     const [configuredMaxSide, maxQuality] = entry;
     if (!Number.isInteger(configuredMaxSide) || configuredMaxSide <= 0
       || !Number.isInteger(maxQuality) || maxQuality < 1 || maxQuality > 100) {
-      throw new ImagePreparationError('图片压缩档位配置无效');
+      throw new ImagePreparationError('Invalid image compression tier configuration');
     }
     const maxSide = Math.min(
       configuredMaxSide,
@@ -266,13 +272,13 @@ async function bestJpegAtSize(image, candidate, profile, chromaSubsampling) {
 async function prepareImage(image, profile) {
   if (!profile || !Array.isArray(profile.allowedMimes) || !Number.isInteger(profile.maxBytes)
     || !Array.isArray(profile.compressionProfiles) || profile.compressionProfiles.length === 0) {
-    throw new ImagePreparationError('图片准备配置无效');
+    throw new ImagePreparationError('Invalid image preparation configuration');
   }
   if (!image || !CANONICAL_MIMES.has(image.mime)) {
-    throw new ImagePreparationError('Provider 仅接受输入网关生成的 JPEG 或 PNG');
+    throw new ImagePreparationError('Providers accept only JPEG or PNG generated by the input gateway');
   }
   let metadata = await metadataFor(image);
-  if (!metadata.width || !metadata.height) throw new ImagePreparationError('无法读取图片尺寸');
+  if (!metadata.width || !metadata.height) throw new ImagePreparationError('Unable to read image dimensions');
   image = await normalizeCanonicalOrientation(image, metadata);
   if (needsAutoOrient(metadata)) metadata = await metadataFor(image);
   if (fitsProfile(image, metadata, profile)) return image;
@@ -283,7 +289,7 @@ async function prepareImage(image, profile) {
     try {
       pngStats = await loadSharp()(image.data, inputOptions()).stats();
     } catch (error) {
-      throw new ImagePreparationError(`图片内容分析失败: ${error.message || error}`, error);
+      throw new ImagePreparationError(`Image content analysis failed: ${error.message || error}`, error);
     }
   }
   const shouldTryLosslessPng = image.mime === 'image/png'
@@ -298,11 +304,11 @@ async function prepareImage(image, profile) {
           const prepared = await convertToPng(image, candidate.maxSide);
           if (fitsProfile(prepared.image, prepared.metadata, profile)) return prepared.image;
         }
-        throw new ImagePreparationError(`透明图片转换后仍无法满足 ${profile.label} 的上传限制`);
+        throw new ImagePreparationError(`The converted transparent image still exceeds the ${profile.label} upload limit`);
       }
     } catch (error) {
       if (error instanceof ImagePreparationError) throw error;
-      throw new ImagePreparationError(`图片转换失败: ${error.message || error}`, error);
+      throw new ImagePreparationError(`Image conversion failed: ${error.message || error}`, error);
     }
   }
 
@@ -313,11 +319,17 @@ async function prepareImage(image, profile) {
       if (prepared) return prepared;
     } catch (error) {
       if (error instanceof ImagePreparationError) throw error;
-      throw new ImagePreparationError(`图片转换失败: ${error.message || error}`, error);
+      throw new ImagePreparationError(`Image conversion failed: ${error.message || error}`, error);
     }
   }
 
-  throw new ImagePreparationError(`图片转换后仍无法满足 ${profile.label} 的上传限制`);
+  throw new ImagePreparationError(`The converted image still exceeds the ${profile.label} upload limit`);
 }
 
-module.exports = { canonicalizeImage, ImagePreparationError, MAX_INPUT_PIXELS, prepareImage };
+module.exports = {
+  canonicalizeImage,
+  ImagePreparationError,
+  MAX_INPUT_PIXELS,
+  prepareImage,
+  readImageDimensions,
+};

@@ -1,40 +1,40 @@
-# 故障排查与恢复
+# Troubleshooting and Recovery
 
-仅在实际进入 vision-bridge SOP 后，处理依赖、密钥、代理、退出码或 Provider 调用失败时读取本文件。Agent 原生处理不需要运行 doctor、配置 SOP Provider Key 或读取本文件。
+Read this file only after entering the vision-bridge SOP and encountering dependency, Key, proxy, exit-code, or Provider-call failures. Native Agent handling does not require doctor, SOP Provider Keys, or this file.
 
-## 先确认执行路径
+## Confirm the Execution Path First
 
-- 当前模型支持图片输入且用户未显式要求 `vision-bridge`：由 Agent 原生处理，结果标注 `[识别方式: Agent 原生视觉]`。
-- 用户显式要求 `vision-bridge`，或当前模型不支持图片输入：进入 vision-bridge SOP。
-- 系统剪贴板只是最后一级输入回退，不作为进入 SOP 的条件。Agent 取得图片后，再按上述两条选择执行路径。
-- 原生视觉不可用但已有真实路径、URL、Data URL 或 Base64 时，直接把这些输入交给 SOP，不读取剪贴板。
+- If the current model supports image input and the user did not explicitly request `vision-bridge`, use native Agent vision and label the result `[Recognition method: native Agent vision]`.
+- If the user explicitly requests `vision-bridge`, or the current model does not support image input, enter the vision-bridge SOP.
+- The system clipboard is only the final input fallback; it does not determine whether to enter the SOP. After the Agent obtains the image, choose the execution path using the two rules above.
+- If native vision is unavailable but a real path, file URL, or public HTTP(S) URL is available, pass that input directly to the SOP without reading the clipboard. User-provided Data URLs and raw Base64 are not public inputs.
 
-## Claude Code / OpenCode 会话附件恢复
+## Claude Code / OpenCode Session Attachment Recovery
 
-以下提示说明本回合存在图片，但当前模型没有取得图片像素：
+The following messages indicate that the current turn contains an image but the current model did not receive its pixels:
 
-- Claude Code：`[Image #n]`、`[Unsupported Image]`、`Cannot read "..." (this model does not support image input)`。
-- OpenCode：`Image input unsupported error`、`Image input error: model cannot read image.png`、`Image input not supported by model`。
+- Claude Code: `[Image #n]`, `[Unsupported Image]`, or `Cannot read "..." (this model does not support image input)`.
+- OpenCode: `Image input unsupported error`, `Image input error: model cannot read image.png`, or `Image input not supported by model`.
 
-报错给出真实绝对路径时直接走 SOP。只有显示名、占位符或无路径报错时，在 Skill 目录运行：
+If the error includes a real absolute path, pass it directly to the SOP. Only when the error contains a display name, placeholder, or no path, run the following from the Skill directory:
 
 ```powershell
-node scripts/recover_session_images.js --client auto --cwd 'C:\当前会话工作目录'
+node scripts/recover_session_images.js --client auto --cwd 'C:\current\session\working-directory'
 ```
 
 ```bash
-node scripts/recover_session_images.js --client auto --cwd 'C:/当前会话工作目录'
+node scripts/recover_session_images.js --client auto --cwd 'C:/current/session/working-directory'
 ```
 
-恢复器只读取限定时间内、工作目录匹配的用户图片 part，并将统一网关校验后的图片写入系统临时目录。它不输出对话正文或 Base64。使用返回 JSON 的 `images[].path` 进入 SOP；如果返回 `SESSION_AMBIGUOUS`，使用错误中对应的当前会话 ID 加 `--session <id>` 重试。
+The recovery tool reads only user image parts within the allowed time window whose working directory matches, then writes images validated by the unified gateway to the system temporary directory. It does not output conversation text or Base64. Use `images[].path` from the returned JSON as SOP input. If it returns `SESSION_AMBIGUOUS`, retry with `--session <id>` using the current session ID listed in the error.
 
-会话中没有可恢复图片时，再运行一次 `node scripts/describe_image.js clipboard '描述图片内容'`。不要手写 `powershell -Command ... Clipboard`；Claude Code 的 Bash 会先展开 `$img` 等 PowerShell 变量，造成“应为表达式”、乱码或空变量错误。会话恢复和内置剪贴板都失败后，才请用户重新粘贴、上传或提供真实路径。
+If the session has no recoverable image, run `node scripts/describe_image.js clipboard 'Describe the image contents'` once. Do not hand-write `powershell -Command ... Clipboard`; Claude Code's Bash expands PowerShell variables such as `$img` first, causing expression, garbled-text, or empty-variable errors. Ask the user to paste or upload the image again, or provide a real path, only after both session recovery and the built-in clipboard input fail.
 
-## 命令行说明
+## Command-Line Notes
 
-先确认当前命令执行器是 CMD、PowerShell、Bash、zsh 还是 Git Bash/MSYS，不要混用语法。所有终端都使用 `scripts/describe_image.js`；Bash/zsh 中将 Windows 本地路径写成 `C:/...` 并使用单引号，避免反斜杠被解释为转义字符。
+First identify whether the command runner is CMD, PowerShell, Bash, zsh, or Git Bash/MSYS; do not mix their syntax. Use `scripts/describe_image.js` in every terminal. In Bash or zsh, write Windows local paths as `C:/...` and use single quotes so backslashes are not interpreted as escape characters.
 
-如果工具支持 `cwd` 或 `workdir`，直接将其设置为 Skill 目录。必须在命令中切换目录时，分别使用：
+If the tool supports `cwd` or `workdir`, set it directly to the Skill directory. When the command itself must change directories, use the appropriate form:
 
 ```cmd
 cd /d "C:\path\to\vision-bridge"
@@ -48,41 +48,41 @@ Set-Location -LiteralPath 'C:\path\to\vision-bridge'
 cd 'C:/path/to/vision-bridge'
 ```
 
-## 依赖检查
+## Dependency Checks
 
-本会话首次进入 SOP 或 SOP 发生运行错误后，从 Skill 目录运行：
+The first time the session enters the SOP, or after an SOP runtime error, run the following from the Skill directory:
 
 ```cmd
 npm run doctor
 ```
 
-Doctor 会检查 Node.js 版本、`sharp`、`bmp-ts`、`https-proxy-agent` 和全部 Provider 的 Key 配置，只报告 Key 是否存在，不输出 Key 内容。只有返回 `DEPENDENCY` 时才安装锁定依赖：
+Doctor checks the Node.js version, `sharp`, `bmp-ts`, `https-proxy-agent`, actual AVIF encode/decode capability, and Key configuration for every Provider. It reports only whether each Key exists and never prints Key contents. Install locked dependencies only when doctor returns `DEPENDENCY`:
 
 ```cmd
 npm ci --omit=dev
 ```
 
-不要在每次识图请求前重复执行安装。
+Do not repeat installation before every image request.
 
-## API Key
+## API Keys
 
-支持：
+Supported variables:
 
 - `ZHIPU_API_KEY`
 - `GEMINI_API_KEY`
 - `MISTRAL_API_KEY`
 - `NVIDIA_API_KEY`
-- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`（两者都配置才启用 Cloudflare）
+- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (Cloudflare is enabled only when both are configured)
 
-注册地址：
+Registration pages:
 
-- 智谱：[https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
-- Gemini：[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-- Mistral：[https://console.mistral.ai/api-keys/](https://console.mistral.ai/api-keys/)
-- NVIDIA：[https://build.nvidia.com](https://build.nvidia.com)
-- Cloudflare：[https://dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)（令牌需 Workers AI: Edit 权限；Account ID 见 dashboard 首页右侧）
+- Zhipu: [https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
+- Gemini: [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- Mistral: [https://console.mistral.ai/api-keys/](https://console.mistral.ai/api-keys/)
+- NVIDIA: [https://build.nvidia.com](https://build.nvidia.com)
+- Cloudflare: [https://dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) (the token requires Workers AI: Edit; the Account ID appears on the right side of the dashboard home page)
 
-不要要求用户在聊天中发送 Key，也不要通过标准输入或命令参数把用户发来的 Key 传给脚本。Windows 用户在自己的终端设置当前用户环境变量：
+Never ask users to send Keys in chat, and never pass a Key supplied by a user through standard input or command arguments. Windows users should set user-scoped environment variables in their own terminal:
 
 ```cmd
 setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
@@ -93,8 +93,8 @@ setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
 setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
 ```
 
-`setx` 不会修改已经运行的进程。脚本会直接读取用户级持久化值，因此可以在当前会话重新调用。
-macOS 用户在启动 Agent 的同一 shell 环境中配置进程环境变量：
+`setx` does not modify already-running processes. The scripts directly read persisted user-scoped values, so they can be invoked again in the current session.
+macOS users should configure process environment variables in the same shell environment that launches the Agent:
 
 ```bash
 export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
@@ -106,64 +106,75 @@ export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
 npm run doctor
 ```
 
-Windows 设置或更新后直接运行 `npm run doctor`，脚本会读取用户环境变量，无需重启 Agent。macOS 的 Agent 进程必须继承上述环境变量。看到至少一个 `API_KEY: 已配置` 后重新执行识图。脚本不支持通过标准输入或命令参数接收 Key，也不会自动持久化。
+After setting or updating a value on Windows, run `npm run doctor` directly. The script reads user environment variables, so the Agent does not need to restart. On macOS, the Agent process must inherit the variables above. Retry image recognition after doctor reports at least one `API_KEY: configured`. The scripts do not accept Keys through standard input or command arguments and do not persist them automatically.
 
-## CLI 剪贴板兼容
+## CLI Clipboard Compatibility
 
-系统剪贴板是会话附件恢复失败后的最后回退。内置 CLI 的 `clipboard` 输入在 Windows 直接调用 PowerShell 参数数组，不依赖 Bash 拼接。macOS 使用系统自带的 `osascript`/AppKit，不依赖 `pngpaste` 或其他 Homebrew 工具。`clipboard-fallback` 仅作为 CLI 兼容参数保留。
+The system clipboard is the final fallback after session attachment recovery fails. On Windows, the built-in CLI `clipboard` input calls PowerShell with an argument array and does not depend on Bash string composition. On macOS, it uses the built-in `osascript`/AppKit facilities and does not require `pngpaste` or other Homebrew tools. `clipboard-fallback` remains only as a CLI compatibility argument.
 
-缺少 Key 或 Provider 失败时，CLI 可能返回 `vision_bridge_retry_*` 临时路径。完成本机 Key 配置并通过 doctor 后，使用该路径重试。
+When a Key is missing or a Provider fails, the CLI may return a temporary `vision_bridge_retry_*` path. After configuring a local Key and passing doctor, retry using that path.
 
-### macOS 实机验收
+A retryable session-attachment failure in a batch returns `retryPath` and `retryExpiresAt` on the corresponding result item. Before expiration, `retryPath` can be used directly as local image input. Successful and non-retryable failures do not retain temporary images.
 
-先复制一张截图，再在 Skill 目录运行：
+To retry only failed items, run `node scripts/create_retry_manifest.js <original-manifest.json> <batch-results.json>`, save stdout as a new manifest, and explicitly invoke the batch script with it. The generator does not call a Provider, and successful items are excluded from the new manifest. If `retryPath` is expired or missing, it returns `RETRY_EXPIRED`.
+
+### macOS Hardware Acceptance Test
+
+Copy a screenshot, then run the following from the Skill directory:
 
 ```bash
-node scripts/describe_image.js clipboard '描述图片内容'
+node scripts/describe_image.js clipboard 'Describe the image contents'
 ```
 
-随后在 Finder 中复制一个图片文件并重复命令。两次都应进入视觉模型，且临时目录中不应残留 `vision_clip_*.png`。如果 stderr 报告无法调用 `osascript`，确认命令存在且当前终端/Agent 有权读取系统剪贴板。
+Next, copy an image file in Finder and repeat the command. Both calls should reach a vision model, and no `vision_clip_*.png` file should remain in the temporary directory. If stderr reports that `osascript` cannot be invoked, confirm that the command exists and that the current terminal or Agent has permission to read the system clipboard.
 
-## 轮询状态
+## Progress Events
 
-stderr 中以下状态用于主 Agent 判断进度，不是图片内容：
+The following stderr events help the parent Agent determine progress; they are not image content:
 
-- `PROVIDER_AVAILABLE`：Key 已配置，Provider 已加入本次固定队列。
-- `PROVIDER_SKIPPED`：Key 未配置，本次不调用该 Provider。
-- `MODEL_COOLDOWN`：该 Provider 池内某些模型处于失败冷却，排到池尾（非失败，仍会兜底尝试）。
-- `PROVIDER_COOLDOWN`：该 Provider 处于失败冷却，排到其他厂商之后（非失败，仍会兜底尝试）。
-- `PROVIDER_SWITCH`：当前 Provider 发生 Provider 级故障，消息包含原因和下一 Provider。
-- `PROVIDER_FAILED`：当前 Provider 发生 Provider 级故障且没有更多可用 Provider。
-- `MODEL_SWITCH`：当前模型失败，消息包含错误代码、原因和下一模型或 Provider。
-- `MODEL_FAILED`：当前模型失败且没有更多可用目标。
+- `[INFO] provider loaded: <provider>`: shown only when `VISION_BRIDGE_VERBOSE=1`; indicates that a Key is configured and the Provider has entered the fixed queue for this call. The model list is not printed.
+- `PROVIDER_SKIPPED`: no Key is configured, so the Provider is not called.
+- `MODEL_COOLDOWN`: some models in the Provider pool are cooling down after failures and move to the end of the pool. This is not a failure; they remain fallback targets.
+- `PROVIDER_COOLDOWN`: the Provider is cooling down after failures and moves behind other Providers. This is not a failure; it remains a fallback target.
+- `PROVIDER_SWITCH`: the current Provider had a Provider-level failure. The message includes the reason and next Provider.
+- `PROVIDER_FAILED`: the current Provider had a Provider-level failure and no more Providers are available.
+- `provider_batch_skipped`: the Provider already had a Provider-level failure in this batch; waiting images skip duplicate requests and continue with the next Provider.
+- `MODEL_SWITCH`: the current model failed. The message includes the error code, reason, and next model or Provider.
+- `MODEL_FAILED`: the current model failed and no more targets are available.
 
-不要在看到 `MODEL_SWITCH` 时提前回复失败；等待进程最终退出。成功时 stdout 末尾的 `[识别模型: provider/model]` 必须保留到最终用户回答。
+Do not report failure as soon as `MODEL_SWITCH` appears; wait for the process to exit. On success, use the recognized stdout content directly without appending a Provider or model name. Batch JSON likewise excludes `provider` and `model` fields.
 
-## 错误处理
+## Error Handling
 
-| 退出码 | 处理方式                                                   |
-| ------ | ---------------------------------------------------------- |
-| `0`  | 使用 stdout 继续回答用户                                   |
-| `1`  | 根据 stderr 的错误代码修正输入、依赖、网络或 Provider 问题 |
-| `2`  | 展示注册地址和设置命令，指导用户在本机配置有效 Key         |
+| Exit code | Action |
+|---|---|
+| `0` | Continue the user response using stdout |
+| `1` | Correct the input, dependency, network, or Provider issue according to the stderr error code |
+| `2` | Show registration pages and setup commands, and guide the user to configure a valid Key locally |
 
-stderr 固定格式：
+stderr uses a fixed format:
 
 ```text
 [ERROR] <CODE>: <message>
 ```
 
-常见错误：
+Common errors:
 
-- `IMAGE_INPUT`：确认路径真实存在；不要猜测文件名；远程 URL 必须是公网地址。Bash 中把 Windows 路径写成 `C:/...`。Bing 的 `/th/id/` 缩略图链接会自动切换到稳定的 `global.bing.com` 图片域名。
-- `CONFIG`：检查模型列表和超时配置。
-- `KEY_REQUIRED`：指导用户在本机配置或更新至少一个 Provider 的 Key 并运行 doctor；不要索取 Key。
-- `NETWORK_UNAVAILABLE`：检查出站网络、代理和 `VISION_API_TIMEOUT_MS` 后重试。
-- `SERVICE_UNAVAILABLE`：Provider 服务暂不可用；稍后重试或检查官方服务状态。
-- `RATE_LIMITED`：等待配额恢复，或配置另一 Provider 的有效 Key。
-- `PROVIDERS_FAILED`：按错误中的每个模型原因检查模型可用性、输入和 Provider 状态；必要时读取 `references/provider_limits.md`。
-- `UNEXPECTED`：先运行 `npm run check`，不要向用户输出 Node 堆栈。
+- `IMAGE_INPUT`: confirm the path actually exists and do not guess filenames. Remote URLs must be publicly reachable. In Bash, write Windows paths as `C:/...`. Bing `/th/id/` thumbnail links automatically switch to the stable `global.bing.com` image host.
+- `BATCH_MANIFEST`: confirm that the JSON is a non-empty array or an object containing a non-empty `items` array. Session attachment `client` accepts only `claude` or `opencode`.
+- `BATCH_SIZE_LIMIT`: the batch exceeds `VISION_BRIDGE_MAX_BATCH_ITEMS`, which defaults to 3. Split the manifest or explicitly change the local environment variable. An oversized batch has not yet been preflighted or read.
+- `BATCH_CANCELLED`: the caller cancelled the batch or `VISION_BRIDGE_BATCH_TIMEOUT_MS` fired. Queued tasks stopped, and in-flight downloads or Provider HTTP requests were aborted. Decide whether to rerun based on the user's intent.
+- `RETRY_EXPIRED`: a temporary retry file referenced by the batch result has expired or does not exist. Rebuild the manifest from an original source that is still readable; do not guess a temporary path.
+- `CONFIGURATION`: check that batch size, acquisition concurrency, and batch-deadline environment variables contain permitted positive integers.
+- `AVIF_UNAVAILABLE`: the current sharp/libvips build does not satisfy mandatory AVIF support. Run `npm ci --omit=dev` again. If it still fails, stop Provider calls and inspect platform dependencies.
+- `CONFIG`: check model lists and timeout configuration.
+- `KEY_REQUIRED`: guide the user to configure or update at least one Provider Key locally and run doctor. Do not ask for the Key.
+- `NETWORK_UNAVAILABLE`: check outbound connectivity, proxy settings, and `VISION_API_TIMEOUT_MS`, then retry.
+- `SERVICE_UNAVAILABLE`: the Provider service is temporarily unavailable. Retry later or check the official service status.
+- `RATE_LIMITED`: wait for quota recovery or configure a valid Key for another Provider.
+- `PROVIDERS_FAILED`: inspect the reason for every model in the error and check model availability, input, and Provider status. Read `references/provider_limits.md` when needed.
+- `UNEXPECTED`: run `npm run check` first, and do not expose a Node.js stack trace to the user.
 
-## 代理
+## Proxy
 
-Provider 请求支持 `HTTPS_PROXY`、`HTTP_PROXY` 和 `NO_PROXY`。代理连接失败时确认代理 URL、端口和 `NO_PROXY` 主机匹配规则，不要在日志中输出包含认证信息的代理 URL。
+Provider requests support `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`. When a proxy connection fails, verify the proxy URL, port, and `NO_PROXY` host-matching rules. Never print a proxy URL containing credentials in logs.

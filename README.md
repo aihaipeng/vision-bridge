@@ -1,93 +1,63 @@
-# vision-bridge
+<a id="top"></a>
 
-## 项目简介 (Introduction)
+# 👁️ vision-bridge
 
-`vision-bridge` 是一个面向编码智能体的图像理解 Skill，让未取得图片内容或不支持图片输入的模型也能完成 OCR、图片描述、视觉分析、错误诊断和多图比较。
+> Image understanding for coding agents, even when the active model cannot read images.
 
-### 核心功能点 (Features)
+[中文](#chinese) | [English](#english)
 
-- 提取图片中的可见文字、代码、表格和字段，并尽量保留阅读顺序与结构。
-- 描述人物、物体、场景、布局、界面状态和显著细节。
-- 分析截图、图表、流程图、文档影像及视觉关系，并按用户问题给出结论。
-- 根据错误截图区分可见证据与可能原因，提供可执行的排查步骤。
-- 并行处理多张图片，保留输入顺序、逐图结果、共同点、差异和失败项。
-- 统一接收本地路径、`file://` URL、公开 HTTP(S) URL、Data URL、Base64、系统剪贴板及恢复后的会话附件。
-- 自动校验真实图片格式、转换图片并按智谱、NVIDIA、Gemini、Mistral、Cloudflare 的固定顺序回退。
-- 在成功结果末尾保留实际使用的 `[识别模型: provider/model]`，便于追溯。
+<a id="chinese"></a>
 
-### 适用边界
+## 🇨🇳 中文说明
 
-在以下情况使用 `vision-bridge`：
+### ✨ 项目简介
 
-- 用户明确要求使用 `vision-bridge`。
-- 当前模型不支持读取图片。
+`vision-bridge` 是面向 Claude Code、Codex、OpenCode、ZCode、Reasonix、OpenClaw 等编码智能体的图像理解 Skill。当前模型无法取得图片内容或不支持图片输入时，它可通过已配置的视觉模型完成：
 
+- OCR、代码、表格与界面文字提取
+- 人物、物体、场景、布局和状态描述
+- 截图、图表、流程图、文档影像和错误信息分析
+- 多图比较、内容去重、逐项结果与失败恢复
 
-## 快速开始 (Quick Start)
+仅在用户明确要求使用 `vision-bridge`，或当前模型无法读取图片时调用。普通可直接看图的请求应由当前 Agent 原生处理。
 
-### 前提条件
+### 🚀 快速开始
 
-- Windows 10/11, macOS。
-- Node.js 20.9 或更高版本及 npm。
-- Git，用于从仓库安装或更新 Skill。
-- 可访问任一 Provider（智谱、Gemini、Mistral、NVIDIA、Cloudflare）API 的出站 HTTPS 网络。
-- 至少配置一个 Provider Key：`ZHIPU_API_KEY`、`GEMINI_API_KEY`、`MISTRAL_API_KEY`、`NVIDIA_API_KEY` 或 `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`。
+#### 📦 环境要求
 
-### 安装步骤
+- Windows 10/11 或 macOS
+- Node.js 20.9.0+ 与 npm
+- 可访问至少一个 Provider 的出站 HTTPS 网络
+- 至少一个 Provider API Key
 
-将仓库克隆到当前客户端或项目配置的 Skill 目录。不同客户端的目录规则不同，请把示例中的路径替换为实际的 `<skills-dir>`。
+#### 🛠️ 安装
 
-Windows CMD：
+将仓库克隆到客户端或项目使用的 Skill 目录：
 
-```cmd
-set "SKILLS_DIR=C:\path\to\your\skills"
-git clone https://github.com/aihaipeng/vision-bridge.git "%SKILLS_DIR%\vision-bridge"
-cd /d "%SKILLS_DIR%\vision-bridge"
+```bash
+git clone https://github.com/aihaipeng/vision-bridge.git
+cd vision-bridge
 npm ci --omit=dev
 npm run doctor
 ```
 
-macOS Bash/zsh：
+更新已安装的 Skill：
 
 ```bash
-SKILLS_DIR='/path/to/your/skills'
-git clone https://github.com/aihaipeng/vision-bridge.git "$SKILLS_DIR/vision-bridge"
-cd "$SKILLS_DIR/vision-bridge"
-npm ci --omit=dev
-npm run doctor
-```
-
-如果仓库已经位于正确的 Skill 目录，只需进入仓库并执行：
-
-```bash
-npm ci --omit=dev
-npm run doctor
-```
-
-### 升级 Skill
-
-从 git 仓库安装后，后续更新只需拉取并重装依赖，无需重新拷贝目录：
-
-```bash
-cd "%SKILLS_DIR%\vision-bridge"   # 或 cd "$SKILLS_DIR/vision-bridge"
 git pull
 npm ci --omit=dev
 npm run doctor
 ```
 
-升级不影响已配置的 Provider Key（存于用户环境变量）和模型健康状态（存于系统临时目录），两者都在 Skill 目录之外。
+#### 🔑 配置 API Key
 
-### 配置 API Key
-
-智谱 Key 注册地址：<https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys>
-
-Gemini Key 注册地址：<https://aistudio.google.com/apikey>
-
-Mistral Key 注册地址：<https://console.mistral.ai/api-keys/>
-
-NVIDIA Key 注册地址：<https://build.nvidia.com>
-
-Cloudflare 令牌创建地址：<https://dash.cloudflare.com/profile/api-tokens>（权限选 Account / Workers AI / Edit；另需 dashboard 首页右侧的 Account ID）
+| Provider | 环境变量 | 注册地址 |
+|---|---|---|
+| 智谱 | `ZHIPU_API_KEY` | [BigModel](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) |
+| Gemini | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+| Mistral | `MISTRAL_API_KEY` | [Mistral Console](https://console.mistral.ai/api-keys/) |
+| NVIDIA | `NVIDIA_API_KEY` | [NVIDIA Build](https://build.nvidia.com) |
+| Cloudflare | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) |
 
 Windows CMD：
 
@@ -98,13 +68,7 @@ setx MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
 setx NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
 setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
 setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
-
-reg query "HKCU\Environment" /v ZHIPU_API_KEY >nul 2>&1 && echo ZHIPU_API_KEY=SET || echo ZHIPU_API_KEY=NOT_SET
-reg query "HKCU\Environment" /v GEMINI_API_KEY >nul 2>&1 && echo GEMINI_API_KEY=SET || echo GEMINI_API_KEY=NOT_SET
-reg query "HKCU\Environment" /v MISTRAL_API_KEY >nul 2>&1 && echo MISTRAL_API_KEY=SET || echo MISTRAL_API_KEY=NOT_SET
-reg query "HKCU\Environment" /v NVIDIA_API_KEY >nul 2>&1 && echo NVIDIA_API_KEY=SET || echo NVIDIA_API_KEY=NOT_SET
-reg query "HKCU\Environment" /v CLOUDFLARE_API_TOKEN >nul 2>&1 && echo CLOUDFLARE_API_TOKEN=SET || echo CLOUDFLARE_API_TOKEN=NOT_SET
-reg query "HKCU\Environment" /v CLOUDFLARE_ACCOUNT_ID >nul 2>&1 && echo CLOUDFLARE_ACCOUNT_ID=SET || echo CLOUDFLARE_ACCOUNT_ID=NOT_SET
+npm run doctor
 ```
 
 macOS Bash/zsh：
@@ -116,129 +80,326 @@ export MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
 export NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
 export CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
 export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
-
-[ -n "$ZHIPU_API_KEY" ] && echo ZHIPU_API_KEY=SET || echo ZHIPU_API_KEY=NOT_SET
-[ -n "$GEMINI_API_KEY" ] && echo GEMINI_API_KEY=SET || echo GEMINI_API_KEY=NOT_SET
-[ -n "$MISTRAL_API_KEY" ] && echo MISTRAL_API_KEY=SET || echo MISTRAL_API_KEY=NOT_SET
-[ -n "$NVIDIA_API_KEY" ] && echo NVIDIA_API_KEY=SET || echo NVIDIA_API_KEY=NOT_SET
-[ -n "$CLOUDFLARE_API_TOKEN" ] && echo CLOUDFLARE_API_TOKEN=SET || echo CLOUDFLARE_API_TOKEN=NOT_SET
-```
-
-
-配置后运行：
-
-```bash
 npm run doctor
 ```
 
-### 调用案例
-Coding Agent 以 OpenCode TUI、Claude Code CLI、Codex、Reasonix、ZCode、OpenClaw Windows Companion为例, 模型使用 deepseek-v4-flash
-<img width="2556" height="1386" alt="f9ce7c9cbce5a8e27bde3ce6889cf84e" src="https://github.com/user-attachments/assets/0439daea-e95f-42fd-86bf-e413903bdbfe" />
-<img width="2560" height="1393" alt="03b2a320f4a2738206e91a06b563c2b1" src="https://github.com/user-attachments/assets/91091fd8-7176-45fb-b4c1-409a75408258" />
-## 目录结构说明 (Directory Structure)
+不要在聊天、命令参数或标准输入中发送 Key。Windows 的 `setx` 不更新已运行进程，但脚本会读取用户级持久化环境变量。
 
-```text
-vision-bridge/
-├── SKILL.md                         # Skill 入口、触发边界与执行工作流
-├── README.md                        # 安装、配置、使用和维护说明
-├── package.json                     # Node.js 版本、依赖和验证命令
-├── package-lock.json                # 锁定的 npm 依赖版本
-├── scripts/
-│   ├── describe_image.js            # 图片识别 CLI 与 Provider 路由
-│   ├── recover_session_images.js    # Claude Code/OpenCode 会话附件恢复
-│   ├── doctor.js                    # 运行环境、依赖和 Key 诊断
-│   ├── image_input_resolver.js      # 路径、URL、Base64、SVG、剪贴板输入网关
-│   ├── image_preparer.js            # 图片校验、标准化、压缩与尺寸控制
-│   ├── key_store.js                 # 从本机环境安全读取 Provider Key
-│   ├── errors.js                    # 统一错误结构
-│   └── providers/
-│       ├── http.js                  # HTTP、代理、超时和网络错误处理
-│       ├── zhipu.js                 # 智谱视觉 Provider 适配器
-│       ├── gemini.js                # Gemini 视觉 Provider 适配器
-│       ├── mistral.js               # Mistral 视觉 Provider 适配器
-│       ├── nvidia.js                # NVIDIA NIM 视觉 Provider 适配器
-│       └── cloudflare.js            # Cloudflare Workers AI 视觉 Provider 适配器
-└── references/
-    ├── provider_limits.md           # Provider、模型和图片限制
-    └── troubleshooting.md           # 依赖、Key、代理和失败恢复
-```
-
-## 支持的输入
+### 🖼️ 输入与图片格式
 
 | 输入来源 | 示例 | 说明 |
-| -------- | ---- | ---- |
-| 本地绝对或相对路径 | `C:\images\shot.png` | 相对路径以 Agent 当前工作目录为基准 |
+|---|---|---|
+| 本地路径 | `C:\images\shot.png` | 支持绝对或相对路径 |
 | `file://` URL | `file:///C:/images/shot.png` | 转换为本地路径后读取 |
-| 公开 HTTP(S) URL | `https://example.com/image.jpg` | 拒绝私网、回环和带用户名密码的 URL |
-| Data URL | `data:image/png;base64,...` | 必须声明为 `image/*` |
-| 裸 Base64 | `iVBORw0KGgo...` | 解码后仍执行真实格式校验 |
-| SVG 文本 | `<svg ...>...</svg>` | 渲染为 PNG 后发送 |
-| 聊天附件路径 | Agent 提供的真实绝对路径 | 仅显示名不等于可读取路径 |
-| 会话附件恢复 | `recover_session_images.js` | 支持 Claude Code 和 OpenCode |
-| 系统剪贴板 | `clipboard` | 用户明确指定时读取；也可作为会话恢复失败后的单次回退 |
+| 公开 HTTP(S) URL | `https://example.com/image.jpg` | 拒绝私网、回环和带凭据 URL |
+| 会话附件 | Claude Code/OpenCode 图片附件 | 无真实路径时由恢复器定位 |
+| 系统剪贴板 | `clipboard` | 用户明确指定，或附件恢复失败后单次回退 |
 
-问题参数可以省略，默认问题为 `请详细描述这张图片的内容`。
+支持 JPG、JPEG、PNG、WebP、TIFF、AVIF、SVG、GIF 第一帧和 BMP。本地文件或远程下载最大 32 MB，解码后最大 100,000,000 像素。Provider 最终只接收标准化后的 JPEG 或 PNG。
 
+用户直接提供的 Data URL、裸 Base64 和原始 SVG 文本会被拒绝。会话适配器可在内部解析客户端已保存的 Data URL；这不是公开输入能力。
 
-## 支持的视觉模型
+### 🧠 使用方式
 
-| 模型厂商 | 模型 | 规格与限制 | 状态 | 网络要求 | 实测平均耗时 |
-| --- | --- | --- | --- | --- | --- |
-| 智谱 | `glm-4.1v-thinking-flash` | 64K 上下文；图像/视频/文本 | 长期免费 | 国内直连 | 2.34s |
-| 智谱 | `glm-4.6v-flash` | 128K 上下文；图像/视频/文件/文本 | 长期免费，主力推荐 | 国内直连 | 9.88s |
-| NVIDIA | `meta/llama-3.2-11b-vision-instruct` | 128K 上下文；图像/文本 | 免费仅限评估，禁生产 | 国内直连 | 6.71s |
-| NVIDIA | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | VL 系列规格 | 列表常轮换 | 国内直连 | 20.08s |
-| Gemini | `gemini-3.1-flash-lite` | 1M 上下文；图像/视频/音频/PDF | 免费，2026-05 转正式版 | 需代理 | 1.83s |
-| Gemini | `gemini-3-flash-preview` | 1M 上下文；同上 | 免费，preview 限速较紧 | 需代理 | 5.23s |
-| Mistral | `mistral-medium-3.5` | 128K 上下文；图像/文本 | 长期免费 | 需代理 | 3.48s |
-| Mistral | `mistral-medium-latest` | 128K 上下文；图像/文本 | 长期免费 | 需代理 | 4.11s |
-| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 128K 上下文；需先发 `agree` | 长期免费 | 需代理 | 17.58s |
+#### 🖼️ 单图识别
 
-规格核对自官方文档，实测于 2026-08-16。
+```bash
+node scripts/describe_image.js "C:/images/shot.png" "Extract the visible text"
+```
 
+问题可省略，默认提示为 `Describe this image in detail.`。
 
-## 图片格式与限制
+#### 🗂️ 多图批次
 
-- 支持 JPEG、PNG、WebP、TIFF、GIF 第一帧、BMP 和 SVG。
-- AVIF、HEIC、HEIF 及其他格式取决于当前 Sharp/libvips 构建的解码能力。
-- 本地文件或远程下载最大 32 MB，解码后最大 100,000,000 像素。
-- 远程 URL 最多跟随 5 次重定向，每次都重新执行公网地址校验。
-- Provider 最终只接收标准化后的 JPEG 或 PNG；超出 Provider 限制时会先压缩，再按需降低分辨率。
-- 损坏图片、HTML、伪造图片声明或不支持的数据会在调用 Provider 前返回 `IMAGE_INPUT`。
+```json
+{
+  "prompt": "Compare these images",
+  "items": [
+    "C:/images/a.jpg",
+    { "input": "https://example.com/b.webp", "prompt": "Extract the text" },
+    { "source": { "kind": "session_attachment", "client": "opencode", "cwd": "C:/workspace" } }
+  ]
+}
+```
 
-更完整的格式和模型限制见 [`references/provider_limits.md`](references/provider_limits.md)。
+```bash
+node scripts/describe_images.js path/to/manifest.json
+```
 
+单批默认最多 3 张；取得/标准化默认并发为 1；Provider 任务默认全局并发为 3。单 Provider 在进程内和整台机器上默认并发均为 1。可通过以下变量调整：
 
-## 常见问题与解决方案
+- `VISION_BRIDGE_MAX_BATCH_ITEMS`
+- `VISION_BRIDGE_ACQUIRE_CONCURRENCY`
+- `VISION_BRIDGE_CONCURRENCY`（1-32）
+- `VISION_BRIDGE_PROVIDER_CONCURRENCY`
+- `VISION_BRIDGE_BATCH_TIMEOUT_MS`（可选，默认无整批超时）
 
-### 🚫 问题 1：智能体报错模型不支持多模态或输入格式有误，并终止执行
+脚本按标准化图片内容和提示词去重，保留输入顺序。单项失败不阻断其他项，但会让批次退出码变为 1。
 
-**现象**：调用识别功能时，Agent 提示 "model does not support image input"、"Unsupported Image"、"输入格式有误" 等错误并直接终止，图片未被识别。
+只重试失败项：
 
-**解决**：在提示词中声明调用 `vision-bridge` skill，并提供图片的真实路径。真实路径包括：本地路径、`file://` URL、公开 HTTP(S) URL、Data URL、Base64、系统剪贴板等。显示名（如 `[Image #1]`）不等于可读取路径，仅凭显示名无法定位图片。
+```bash
+node scripts/create_retry_manifest.js original-manifest.json batch-results.json > retry-manifest.json
+node scripts/describe_images.js retry-manifest.json
+```
 
-### 🖼️ 问题 2：上传多张图片时存在漏图
+#### 📎 会话附件恢复
 
-**现象**：一次上传多张图片，识别结果缺少其中部分图片，或只识别了最后一张。
+当 Agent 只看到 `[Image #n]`、`Unsupported Image` 或无路径错误时：
 
-**解决**：在提示词中明确声明需要识别图片的数量，并提供每张图片的真实路径（本地路径、`file://` URL、公开 HTTP(S) URL、Data URL、Base64、系统剪贴板等）。`vision-bridge` 会按输入顺序并行处理全部图片，并保留逐图结果、共同点、差异和失败项。
+```bash
+node scripts/recover_session_images.js --client auto --cwd "C:/current/workspace"
+```
 
-### 📋 问题 3：Claude Code CLI 不支持将图片直接复制到命令行
+使用返回 JSON 中的 `images[].path` 继续识别。若返回 `SESSION_AMBIGUOUS`，使用 `--session <id>` 指定当前会话；不要猜测附件路径。
 
-**现象**：Claude Code CLI 无法直接把剪贴板中的图片粘贴到命令行作为输入。
+### ⚙️ 运行规则
 
-**解决**：将图片保存到本地文件，再提供该文件的本地路径进行识别；或让智能体读取系统剪贴板识别（在提示词中声明使用剪贴板输入）。
+- 固定 Provider 顺序：智谱 → NVIDIA → Gemini → Mistral → Cloudflare。
+- 模型失败时先尝试同 Provider 的下一模型；Provider 级失败时切换厂商。
+- 默认隐藏 Provider 加载日志。
+- 排查配置时设置 `VISION_BRIDGE_VERBOSE=1`，仅显示 `[INFO] provider loaded: <provider>`，不打印模型列表。
+- 单图 stdout 不追加 Provider 或模型名称；批次 JSON 不包含 `provider` 或 `model` 字段。
+- 图片只在构造出站请求时编码为 Base64 或 Data URL，不写入工作流状态、日志或结果 JSON。
 
-## 官方参考
+### 🤖 支持的模型
 
-- [Gemini API Key](https://aistudio.google.com/apikey)
-- [Gemini 图片理解](https://ai.google.dev/gemini-api/docs/image-understanding)
-- [智谱 API Key 管理](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys)
-- [智谱对话补全 API](https://docs.bigmodel.cn/api-reference/%E6%A8%A1%E5%9E%8B-api/%E5%AF%B9%E8%AF%9D%E8%A1%A5%E5%85%A8)
-- [智谱视觉模型](https://docs.bigmodel.cn/cn/guide/models/vlm)
-- [Mistral API Key](https://console.mistral.ai/api-keys/)
-- [Mistral 视觉能力](https://docs.mistral.ai/capabilities/vision/)
-- [NVIDIA Build](https://build.nvidia.com)
-- [Cloudflare API Token](https://dash.cloudflare.com/profile/api-tokens)
-- [Cloudflare Workers AI Llama 3.2 Vision](https://developers.cloudflare.com/workers-ai/models/llama-3.2-11b-vision-instruct/)
-- [Apple NSPasteboard](https://developer.apple.com/documentation/appkit/nspasteboard)
+| Provider | 默认模型 | 网络提示 |
+|---|---|---|
+| 智谱 | `glm-4.1v-thinking-flash`, `glm-4.6v-flash` | 国内通常可直连 |
+| NVIDIA | `meta/llama-3.2-11b-vision-instruct`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | 国内通常可直连 |
+| Gemini | `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | 部分网络需要代理 |
+| Mistral | `mistral-medium-3.5`, `mistral-medium-latest` | 部分网络需要代理 |
+| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 部分网络需要代理 |
+
+模型可用性、免费额度和目录会随 Provider 调整，完整限制见 [`references/provider_limits.md`](references/provider_limits.md)。
+
+### 🎬 调用示例
+
+以下截图来自 OpenCode TUI、Claude Code CLI、Codex、Reasonix、ZCode 和 OpenClaw Windows Companion 等客户端：
+
+<img width="1280" alt="vision-bridge example 1" src="https://github.com/user-attachments/assets/0439daea-e95f-42fd-86bf-e413903bdbfe" />
+
+<img width="1280" alt="vision-bridge example 2" src="https://github.com/user-attachments/assets/91091fd8-7176-45fb-b4c1-409a75408258" />
+
+### 🧯 常见问题
+
+| 问题 | 处理方式 |
+|---|---|
+| 模型提示不支持图片 | 明确要求调用 `vision-bridge`，并提供真实路径、公开 URL、附件或剪贴板输入 |
+| 多图漏图或顺序错误 | 使用 `describe_images.js` 和有序 JSON 清单 |
+| 只有附件显示名 | 先运行 `recover_session_images.js`，不要扫描目录猜测文件 |
+| `DEPENDENCY` | 在 Skill 目录运行 `npm ci --omit=dev` |
+| `KEY_REQUIRED` | 在本机配置至少一个 Provider Key，再运行 `npm run doctor` |
+| `NETWORK_UNAVAILABLE` | 检查出站网络、`HTTPS_PROXY`、`HTTP_PROXY` 与 `NO_PROXY` |
+
+完整恢复步骤见 [`references/troubleshooting.md`](references/troubleshooting.md)。
+
+### 📚 参考资料
+
+- [Skill 工作流](SKILL.md)
+- [Provider 与图片限制](references/provider_limits.md)
+- [Provider 错误码](references/provider-error-codes.md)
+- [故障排查](references/troubleshooting.md)
+
+[返回顶部](#top)
+
+---
+
+<a id="english"></a>
+
+## 🇺🇸 English Guide
+
+### ✨ Overview
+
+`vision-bridge` is an image-understanding Skill for coding agents such as Claude Code, Codex, OpenCode, ZCode, Reasonix, and OpenClaw. When the active model cannot access an image or does not support image input, the Skill uses configured vision models for:
+
+- OCR and extraction of code, tables, interface text, and document structure
+- Descriptions of people, objects, scenes, layouts, and UI states
+- Analysis of screenshots, charts, diagrams, document images, and error messages
+- Ordered multi-image comparison, deduplication, partial results, and failure recovery
+
+Use it only when the user explicitly requests `vision-bridge` or the active model cannot read the image. Let the current Agent handle ordinary image requests when native vision is available.
+
+### 🚀 Quick Start
+
+#### 📦 Requirements
+
+- Windows 10/11 or macOS
+- Node.js 20.9.0+ and npm
+- Outbound HTTPS access to at least one Provider
+- At least one Provider API Key
+
+#### 🛠️ Installation
+
+Clone the repository into the Skill directory used by your client or project:
+
+```bash
+git clone https://github.com/aihaipeng/vision-bridge.git
+cd vision-bridge
+npm ci --omit=dev
+npm run doctor
+```
+
+Update an installed copy:
+
+```bash
+git pull
+npm ci --omit=dev
+npm run doctor
+```
+
+#### 🔑 API Key Setup
+
+| Provider | Environment variables | Registration page |
+|---|---|---|
+| Zhipu | `ZHIPU_API_KEY` | [BigModel](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) |
+| Gemini | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+| Mistral | `MISTRAL_API_KEY` | [Mistral Console](https://console.mistral.ai/api-keys/) |
+| NVIDIA | `NVIDIA_API_KEY` | [NVIDIA Build](https://build.nvidia.com) |
+| Cloudflare | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) |
+
+Windows CMD:
+
+```cmd
+setx ZHIPU_API_KEY "YOUR_ZHIPU_API_KEY"
+setx GEMINI_API_KEY "YOUR_GEMINI_API_KEY"
+setx MISTRAL_API_KEY "YOUR_MISTRAL_API_KEY"
+setx NVIDIA_API_KEY "YOUR_NVIDIA_API_KEY"
+setx CLOUDFLARE_API_TOKEN "YOUR_CLOUDFLARE_API_TOKEN"
+setx CLOUDFLARE_ACCOUNT_ID "YOUR_CLOUDFLARE_ACCOUNT_ID"
+npm run doctor
+```
+
+macOS Bash/zsh:
+
+```bash
+export ZHIPU_API_KEY='YOUR_ZHIPU_API_KEY'
+export GEMINI_API_KEY='YOUR_GEMINI_API_KEY'
+export MISTRAL_API_KEY='YOUR_MISTRAL_API_KEY'
+export NVIDIA_API_KEY='YOUR_NVIDIA_API_KEY'
+export CLOUDFLARE_API_TOKEN='YOUR_CLOUDFLARE_API_TOKEN'
+export CLOUDFLARE_ACCOUNT_ID='YOUR_CLOUDFLARE_ACCOUNT_ID'
+npm run doctor
+```
+
+Never send Keys through chat, command arguments, or standard input. Windows `setx` does not update running processes, but the scripts read persisted user-scoped environment variables.
+
+### 🖼️ Inputs and Image Formats
+
+| Input source | Example | Notes |
+|---|---|---|
+| Local path | `C:\images\shot.png` | Absolute and relative paths are supported |
+| `file://` URL | `file:///C:/images/shot.png` | Converted to a local path before reading |
+| Public HTTP(S) URL | `https://example.com/image.jpg` | Private, loopback, and credential-bearing URLs are rejected |
+| Session attachment | Claude Code/OpenCode image attachment | Recovered when no real path is available |
+| System clipboard | `clipboard` | Explicit input or one-time fallback after attachment recovery |
+
+Supported formats are JPG, JPEG, PNG, WebP, TIFF, AVIF, SVG, the first GIF frame, and BMP. Local files and remote downloads are limited to 32 MB and 100,000,000 decoded pixels. Providers receive only standardized JPEG or PNG.
+
+User-supplied Data URLs, bare Base64, and raw SVG text are rejected. Session adapters may internally decode Data URLs already stored by a supported client; this is not a public input capability.
+
+### 🧠 Usage
+
+#### 🖼️ Single Image
+
+```bash
+node scripts/describe_image.js "C:/images/shot.png" "Extract the visible text"
+```
+
+The question is optional. The default prompt is `Describe this image in detail.`
+
+#### 🗂️ Image Batch
+
+```json
+{
+  "prompt": "Compare these images",
+  "items": [
+    "C:/images/a.jpg",
+    { "input": "https://example.com/b.webp", "prompt": "Extract the text" },
+    { "source": { "kind": "session_attachment", "client": "opencode", "cwd": "C:/workspace" } }
+  ]
+}
+```
+
+```bash
+node scripts/describe_images.js path/to/manifest.json
+```
+
+The default batch limit is 3 images. Acquisition and standardization concurrency defaults to 1. Global Provider-task concurrency defaults to 3. Per-Provider concurrency defaults to 1 both in-process and machine-wide. Configure these limits with:
+
+- `VISION_BRIDGE_MAX_BATCH_ITEMS`
+- `VISION_BRIDGE_ACQUIRE_CONCURRENCY`
+- `VISION_BRIDGE_CONCURRENCY` (1-32)
+- `VISION_BRIDGE_PROVIDER_CONCURRENCY`
+- `VISION_BRIDGE_BATCH_TIMEOUT_MS` (optional; no whole-batch deadline by default)
+
+The runner deduplicates standardized image content and prompts while preserving input order. One failed item does not block the rest, but it makes the batch exit with code 1.
+
+Retry failed items only:
+
+```bash
+node scripts/create_retry_manifest.js original-manifest.json batch-results.json > retry-manifest.json
+node scripts/describe_images.js retry-manifest.json
+```
+
+#### 📎 Session Attachment Recovery
+
+When the Agent sees only `[Image #n]`, `Unsupported Image`, or a pathless error:
+
+```bash
+node scripts/recover_session_images.js --client auto --cwd "C:/current/workspace"
+```
+
+Continue with each `images[].path` from the returned JSON. On `SESSION_AMBIGUOUS`, select the current session with `--session <id>`; never guess an attachment path.
+
+### ⚙️ Runtime Rules
+
+- Fixed Provider order: Zhipu -> NVIDIA -> Gemini -> Mistral -> Cloudflare.
+- A model failure advances to the next model from the same Provider; a Provider-level failure advances to the next Provider.
+- Provider-load logs are hidden by default.
+- For configuration diagnostics, set `VISION_BRIDGE_VERBOSE=1`. It prints only `[INFO] provider loaded: <provider>` and omits model lists.
+- Single-image stdout does not append Provider or model names. Batch JSON excludes `provider` and `model` fields.
+- Images become Base64 or Data URLs only while serializing outbound requests; workflow state, logs, and result JSON never store those encodings.
+
+### 🤖 Supported Models
+
+| Provider | Default models | Network notes |
+|---|---|---|
+| Zhipu | `glm-4.1v-thinking-flash`, `glm-4.6v-flash` | Usually reachable directly from mainland China |
+| NVIDIA | `meta/llama-3.2-11b-vision-instruct`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | Usually reachable directly from mainland China |
+| Gemini | `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | Some networks require a proxy |
+| Mistral | `mistral-medium-3.5`, `mistral-medium-latest` | Some networks require a proxy |
+| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | Some networks require a proxy |
+
+Provider catalogs, free tiers, and model availability can change. See [`references/provider_limits.md`](references/provider_limits.md) for complete limits.
+
+### 🎬 Examples
+
+The screenshots below show usage from clients including OpenCode TUI, Claude Code CLI, Codex, Reasonix, ZCode, and OpenClaw Windows Companion:
+
+<img width="1280" alt="vision-bridge example 1" src="https://github.com/user-attachments/assets/0439daea-e95f-42fd-86bf-e413903bdbfe" />
+
+<img width="1280" alt="vision-bridge example 2" src="https://github.com/user-attachments/assets/91091fd8-7176-45fb-b4c1-409a75408258" />
+
+### 🧯 Troubleshooting
+
+| Problem | Action |
+|---|---|
+| The model reports unsupported image input | Explicitly request `vision-bridge` and provide a real path, public URL, attachment, or clipboard input |
+| A multi-image request misses items or changes order | Use `describe_images.js` with an ordered JSON manifest |
+| Only an attachment display name is available | Run `recover_session_images.js`; do not scan directories and guess |
+| `DEPENDENCY` | Run `npm ci --omit=dev` in the Skill directory |
+| `KEY_REQUIRED` | Configure at least one Provider Key locally, then run `npm run doctor` |
+| `NETWORK_UNAVAILABLE` | Check outbound access, `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY` |
+
+See [`references/troubleshooting.md`](references/troubleshooting.md) for the complete recovery guide.
+
+### 📚 References
+
+- [Skill workflow](SKILL.md)
+- [Provider and image limits](references/provider_limits.md)
+- [Provider error codes](references/provider-error-codes.md)
+- [Troubleshooting](references/troubleshooting.md)
+
+[Back to top](#top)

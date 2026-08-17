@@ -39,7 +39,7 @@ function persistState(state, file = DEFAULT_STATE_FILE) {
     fs.writeFileSync(tmp, JSON.stringify(merged));
     fs.renameSync(tmp, file);
   } catch {
-    // ponytail: 无锁合并写，毫秒级窗口内两写者相撞时丢一次更新，可接受；健康状态是建议性数据
+    // Lock-free merge writes can lose one update when writers collide within milliseconds; health data is advisory.
   }
 }
 

@@ -1,0 +1,9 @@
+{
+  "prompt": "不应调用 Provider。",
+  "items": [
+    "tests/fixtures/smoke_one.svg",
+    "tests/fixtures/smoke_two.svg",
+    "tests/fixtures/smoke_three.svg",
+    "tests/fixtures/smoke_one.svg"
+  ]
+}

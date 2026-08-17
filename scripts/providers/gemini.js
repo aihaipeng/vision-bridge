@@ -1,6 +1,8 @@
 const { prepareImage } = require('../image_preparer');
 const { ProviderError, providerFailureScope, singleLine } = require('../errors');
 const { fetchWithTimeout } = require('./http');
+const { encodeBase64 } = require('../image_codec');
+const { isBatchCancelled } = require('../workflow/cancellation');
 
 const PROVIDER = 'gemini';
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent';
@@ -25,8 +27,8 @@ function extractText(data, model) {
   if (text) return text;
   const blockReason = data && data.promptFeedback && data.promptFeedback.blockReason;
   throw new ProviderError(PROVIDER, 'INVALID_RESPONSE', blockReason
-    ? `模型 ${model} 拒绝请求: ${blockReason}`
-    : `模型 ${model} 返回了空响应`, { model });
+    ? `Model ${model} rejected the request: ${blockReason}`
+    : `Model ${model} returned an empty response`, { model });
 }
 
 function isAuthError(status, raw) {
@@ -65,19 +67,19 @@ function rateLimitDetails(raw) {
 
 function modelQuotaMessage(model, retryAfterMs) {
   const retryHint = retryAfterMs
-    ? `，服务端建议约 ${Math.ceil(retryAfterMs / 1000)} 秒后重试该模型`
+    ? `; the server recommends retrying this model in about ${Math.ceil(retryAfterMs / 1000)} seconds`
     : '';
-  return `模型 ${model} 达到模型级配额${retryHint}`;
+  return `Model ${model} reached a model-level quota${retryHint}`;
 }
 
 function providerQuotaMessage(retryAfterMs) {
   const retryHint = retryAfterMs
-    ? `，服务端建议约 ${Math.ceil(retryAfterMs / 1000)} 秒后恢复`
+    ? `; the server recommends waiting about ${Math.ceil(retryAfterMs / 1000)} seconds for recovery`
     : '';
-  return `Gemini Provider 达到配额限制${retryHint}`;
+  return `Gemini Provider reached its quota limit${retryHint}`;
 }
 
-async function requestModel({ model, payload, key, fetchImpl }) {
+async function requestModel({ model, payload, key, fetchImpl, signal }) {
   const url = API_URL.replace('{model}', encodeURIComponent(model));
   let response;
   try {
@@ -85,9 +87,11 @@ async function requestModel({ model, payload, key, fetchImpl }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify(payload),
+      signal,
     });
   } catch (error) {
-    throw new ProviderError(PROVIDER, 'NETWORK', `Gemini 网络请求失败: ${singleLine(error.message || error)}`, {
+    if (isBatchCancelled(error)) throw error;
+    throw new ProviderError(PROVIDER, 'NETWORK', `Gemini network request failed: ${singleLine(error.message || error)}`, {
       model, retryable: true, cause: error,
     });
   }
@@ -97,14 +101,14 @@ async function requestModel({ model, payload, key, fetchImpl }) {
     let data;
     try { data = JSON.parse(raw); }
     catch (error) {
-      throw new ProviderError(PROVIDER, 'INVALID_JSON', `模型 ${model} 返回了非 JSON 响应`, { model, cause: error });
+      throw new ProviderError(PROVIDER, 'INVALID_JSON', `Model ${model} returned a non-JSON response`, { model, cause: error });
     }
     return extractText(data, model);
   }
 
   const auth = isAuthError(response.status, raw);
   if (auth) {
-    throw new ProviderError(PROVIDER, 'AUTH', `Gemini API key 无效或无权访问（HTTP ${response.status}）`, {
+    throw new ProviderError(PROVIDER, 'AUTH', `Gemini API Key is invalid or unauthorized (HTTP ${response.status})`, {
       model, status: response.status, auth: true,
     });
   }
@@ -127,7 +131,7 @@ async function requestModel({ model, payload, key, fetchImpl }) {
   }
   const modelUnavailable = response.status === 503 && /(?:this\s+model|model).*(?:high\s+demand|unavailable)/i.test(raw);
   const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
-  throw new ProviderError(PROVIDER, modelUnavailable ? 'MODEL_UNAVAILABLE' : 'HTTP', `模型 ${model} 调用失败（HTTP ${response.status}）: ${singleLine(raw).slice(0, 300)}`, {
+  throw new ProviderError(PROVIDER, modelUnavailable ? 'MODEL_UNAVAILABLE' : 'HTTP', `Model ${model} call failed (HTTP ${response.status}): ${singleLine(raw).slice(0, 300)}`, {
       model,
       status: response.status,
       retryable,
@@ -150,13 +154,14 @@ function failureDetails(model, error) {
   };
 }
 
-async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl, onStatus, fallbackTarget }) {
+async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl, onStatus, fallbackTarget, signal }) {
   const prepared = await prepareImage(image, IMAGE_PROFILE);
+  const imageBase64 = encodeBase64(prepared);
   const payload = {
     contents: [{
       role: 'user',
       parts: [
-        { inline_data: { mime_type: prepared.mime, data: prepared.data.toString('base64') } },
+        { inline_data: { mime_type: prepared.mime, data: imageBase64 } },
         { text: prompt },
       ],
     }],
@@ -165,9 +170,10 @@ async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl
   for (let index = 0; index < models.length; index += 1) {
     const model = models[index];
     try {
-      const text = await requestModel({ model, payload, key, fetchImpl });
+      const text = await requestModel({ model, payload, key, fetchImpl, signal });
       return { text, model, provider: PROVIDER };
     } catch (error) {
+      if (isBatchCancelled(error)) throw error;
       const failure = failureDetails(model, error);
       failures.push(failure);
       const next = failure.scope === 'provider'
@@ -178,13 +184,13 @@ async function describe({ image, prompt, key, models = DEFAULT_MODELS, fetchImpl
         : (next ? 'model_switch' : 'model_failed');
       if (onStatus) onStatus({ type, ...failure, next });
       if (failure.scope === 'provider') {
-        throw new ProviderError(PROVIDER, 'PROVIDER_UNAVAILABLE', `${model} 发生 Provider 级故障: ${failure.message}`, {
+        throw new ProviderError(PROVIDER, 'PROVIDER_UNAVAILABLE', `${model} had a Provider-level failure: ${failure.message}`, {
           failures,
         });
       }
     }
   }
-  throw new ProviderError(PROVIDER, 'MODELS_FAILED', `所有 Gemini 模型均失败: ${failures.map((item) => `${item.model}: ${item.message}`).join(' | ')}`, {
+  throw new ProviderError(PROVIDER, 'MODELS_FAILED', `All Gemini models failed: ${failures.map((item) => `${item.model}: ${item.message}`).join(' | ')}`, {
     failures,
   });
 }

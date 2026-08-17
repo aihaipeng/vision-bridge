@@ -6,4 +6,3 @@ node_modules/
 coverage/
 vision_bridge_retry_*
 vision_clip_*
-tests/

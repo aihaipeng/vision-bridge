@@ -8,6 +8,7 @@ const https = require('https');
 const { spawnSync } = require('child_process');
 const { URL, fileURLToPath } = require('url');
 const { canonicalizeImage, ImagePreparationError } = require('./image_preparer');
+const { cancellationError, throwIfCancelled } = require('./workflow/cancellation');
 
 const MAX_DOWNLOAD_MB = 32;
 const REMOTE_TIMEOUT_MS = 30000;
@@ -107,7 +108,7 @@ function raiseImageError(message, code = 1) {
 function clipboardSystemName(platform = process.platform) {
   if (platform === 'win32') return 'Windows';
   if (platform === 'darwin') return 'macOS';
-  return '系统';
+  return 'system';
 }
 
 function windowsClipboardImagePath({ spawnSyncImpl, existsSync, tmpDir, pid }) {
@@ -119,7 +120,7 @@ function windowsClipboardImagePath({ spawnSyncImpl, existsSync, tmpDir, pid }) {
   const tmp = path.join(tmpDir, `vision_clip_${pid}.png`);
   const save = spawnSyncImpl('powershell', ['-NoProfile', '-Sta', '-Command', "$ErrorActionPreference='Stop'; try { $img = Get-Clipboard -Format Image } catch { $img = $null }; if ($img) { $img.Save('" + tmp.replace(/'/g, "''") + "') } else { exit 1 }"] , { stdio: 'ignore' });
   if (save.status === 0 && existsSync(tmp)) return { filePath: tmp, isTemp: true };
-  raiseImageError('错误: 剪贴板中没有图片。请重新用截图工具或右键复制图片，或先把图片保存成文件再提供路径');
+  raiseImageError('Error: The clipboard does not contain an image. Copy an image again with a screenshot tool or context menu, or save it as a file and provide its path');
 }
 
 function macosClipboardImagePath({ spawnSyncImpl, existsSync, rmSync, tmpDir, pid }) {
@@ -131,9 +132,9 @@ function macosClipboardImagePath({ spawnSyncImpl, existsSync, rmSync, tmpDir, pi
   if (result.status === 0 && existsSync(tmp)) return { filePath: tmp, isTemp: true };
   if (existsSync(tmp)) rmSync(tmp, { force: true });
   if (result.error) {
-    raiseImageError(`错误: 无法调用 macOS 系统剪贴板工具 osascript: ${result.error.message || result.error}`);
+    raiseImageError(`Error: Unable to invoke the macOS clipboard tool osascript: ${result.error.message || result.error}`);
   }
-  raiseImageError('错误: 剪贴板中没有图片。请重新用截图工具或右键复制图片，或先把图片保存成文件再提供路径');
+  raiseImageError('Error: The clipboard does not contain an image. Copy an image again with a screenshot tool or context menu, or save it as a file and provide its path');
 }
 
 function clipboardImagePath(options = {}) {
@@ -147,15 +148,15 @@ function clipboardImagePath(options = {}) {
   };
   if (dependencies.platform === 'win32') return windowsClipboardImagePath(dependencies);
   if (dependencies.platform === 'darwin') return macosClipboardImagePath(dependencies);
-  raiseImageError('错误: clipboard 模式仅支持 Windows 和 macOS，请把图片保存成文件后再提供路径');
+  raiseImageError('Error: Clipboard mode supports only Windows and macOS; save the image as a file and provide its path');
 }
 
 function resolveLocalImage(filePath, source) {
   filePath = path.resolve(filePath);
-  if (filePath.startsWith('\\\\')) raiseImageError('错误: 不支持 UNC 网络共享路径，请先复制到本地磁盘后再提供');
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) raiseImageError(`错误: 文件不存在: ${source}`);
+  if (filePath.startsWith('\\\\')) raiseImageError('Error: UNC network-share paths are unsupported; copy the image to a local disk first');
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) raiseImageError(`Error: File does not exist: ${source}`);
   const size = fs.statSync(filePath).size;
-  if (size > MAX_DOWNLOAD_BYTES) raiseImageError(`错误: 本地图片超过 ${MAX_DOWNLOAD_MB}MB 限制，请先压缩或裁剪后再提供`);
+  if (size > MAX_DOWNLOAD_BYTES) raiseImageError(`Error: Local image exceeds the ${MAX_DOWNLOAD_MB}MB limit; compress or crop it first`);
   return { data: fs.readFileSync(filePath), source };
 }
 
@@ -163,13 +164,13 @@ function isPublicIp(ip) {
   if (ip.startsWith('::ffff:') && net.isIP(ip.slice(7)) === 4) ip = ip.slice(7);
   const family = net.isIP(ip);
   if (family) return !NON_PUBLIC_IPS.check(ip, family === 4 ? 'ipv4' : 'ipv6');
-  raiseImageError(`错误: 远程主机解析到了非法地址: ${ip}`);
+  raiseImageError(`Error: Remote host resolved to a forbidden address: ${ip}`);
 }
 
 function createPinnedLookup(addresses) {
   const records = addresses.map((address) => ({ address, family: net.isIP(address) }));
   if (!records.length || records.some((record) => !record.family)) {
-    raiseImageError('错误: 远程主机没有可固定的有效 IP 地址');
+    raiseImageError('Error: Remote host has no valid IP address that can be pinned');
   }
   return (_hostname, options, callback) => {
     if (options && typeof options === 'object' && options.all) callback(null, records);
@@ -186,41 +187,60 @@ function normalizeRemoteUrl(inputUrl) {
   return url;
 }
 
-async function ensurePublicHttpUrl(inputUrl) {
+async function ensurePublicHttpUrl(inputUrl, options = {}) {
+  throwIfCancelled(options.signal);
   const url = normalizeRemoteUrl(inputUrl);
-  if (!['http:', 'https:'].includes(url.protocol)) raiseImageError(`错误: 不支持的远程 URL 协议: ${url.protocol}`);
-  if (url.username || url.password) raiseImageError('错误: 远程 URL 不允许包含用户名或密码');
+  if (!['http:', 'https:'].includes(url.protocol)) raiseImageError(`Error: Unsupported remote URL protocol: ${url.protocol}`);
+  if (url.username || url.password) raiseImageError('Error: Remote URL cannot contain a username or password');
   const records = await dns.lookup(url.hostname, { all: true });
-  if (!records.length) raiseImageError(`错误: 远程主机 ${url.hostname} 未解析到有效地址`);
+  throwIfCancelled(options.signal);
+  if (!records.length) raiseImageError(`Error: Remote host ${url.hostname} did not resolve to a valid address`);
   const addresses = records.map((r) => r.address);
   for (const address of addresses) {
-    if (!isPublicIp(address)) raiseImageError(`错误: 仅允许公开远程 URL，主机 ${url.hostname} 解析到了非公网地址 ${address}`);
+    if (!isPublicIp(address)) raiseImageError(`Error: Only public remote URLs are allowed; host ${url.hostname} resolved to non-public address ${address}`);
   }
   return { url, addresses };
 }
 
-function readResponse(res) {
+function readResponse(res, signal) {
   return new Promise((resolve, reject) => {
+    const onAbort = () => res.destroy(cancellationError(signal));
+    if (signal) {
+      if (signal.aborted) { reject(cancellationError(signal)); return; }
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+    const finish = (callback, value) => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      callback(value);
+    };
     const chunks = [];
     let total = 0;
     res.on('data', (chunk) => {
       total += chunk.length;
       if (total > MAX_DOWNLOAD_BYTES) {
-        res.destroy(new ImageStandardizationError(`错误: 远程图片下载后超过 ${MAX_DOWNLOAD_MB}MB 限制`));
+        res.destroy(new ImageStandardizationError(`Error: Downloaded remote image exceeds the ${MAX_DOWNLOAD_MB}MB limit`));
         return;
       }
       chunks.push(chunk);
     });
-    res.on('end', () => resolve(Buffer.concat(chunks)));
-    res.on('error', reject);
+    res.on('end', () => finish(resolve, Buffer.concat(chunks)));
+    res.on('error', (error) => finish(reject, signal && signal.aborted ? cancellationError(signal, error) : error));
   });
 }
 
-async function requestRemote(currentUrl, redirectsLeft) {
-  const { url, addresses } = await ensurePublicHttpUrl(currentUrl);
+async function requestRemote(currentUrl, redirectsLeft, options = {}) {
+  const { signal } = options;
+  throwIfCancelled(signal);
+  const { url, addresses } = await ensurePublicHttpUrl(currentUrl, options);
   const lib = url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {
-    const req = lib.request({
+    let req;
+    const onAbort = () => req.destroy(cancellationError(signal));
+    const finish = (callback, value) => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      callback(value);
+    };
+    req = lib.request({
       protocol: url.protocol,
       hostname: url.hostname,
       port: url.port || undefined,
@@ -233,61 +253,58 @@ async function requestRemote(currentUrl, redirectsLeft) {
     }, async (res) => {
       try {
         const remoteAddress = res.socket && res.socket.remoteAddress ? res.socket.remoteAddress : addresses[0];
-        if (!isPublicIp(remoteAddress)) throw new ImageStandardizationError(`错误: 远程主机 ${url.hostname} 实际连接到了非公网地址 ${remoteAddress}`);
+        if (!isPublicIp(remoteAddress)) throw new ImageStandardizationError(`Error: Remote host ${url.hostname} connected to non-public address ${remoteAddress}`);
         if ([301,302,303,307,308].includes(res.statusCode)) {
-          if (redirectsLeft <= 0) throw new ImageStandardizationError(`错误: 远程 URL 重定向次数超过 ${MAX_REDIRECTS} 次限制`);
+          if (redirectsLeft <= 0) throw new ImageStandardizationError(`Error: Remote URL exceeded the ${MAX_REDIRECTS}-redirect limit`);
           const location = res.headers.location;
-          if (!location) throw new ImageStandardizationError('错误: 远程 URL 返回了空的重定向地址');
+          if (!location) throw new ImageStandardizationError('Error: Remote URL returned an empty redirect location');
           res.resume();
-          resolve(requestRemote(new URL(location, url).toString(), redirectsLeft - 1));
+          finish(resolve, requestRemote(new URL(location, url).toString(), redirectsLeft - 1, options));
           return;
         }
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          const detail = (await readResponse(res)).toString('utf8').slice(0, 300);
-          throw new ImageStandardizationError(`错误: 下载远程图片失败，HTTP ${res.statusCode}: ${detail}`);
+          const detail = (await readResponse(res, signal)).toString('utf8').slice(0, 300);
+          throw new ImageStandardizationError(`Error: Failed to download remote image, HTTP ${res.statusCode}: ${detail}`);
         }
-        resolve(readResponse(res));
+        finish(resolve, readResponse(res, signal));
       } catch (error) {
-        reject(error);
+        finish(reject, error);
       }
     });
-    req.on('timeout', () => req.destroy(new ImageStandardizationError('错误: 下载远程图片超时')));
-    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new ImageStandardizationError('Error: Remote image download timed out')));
+    req.on('error', (error) => finish(reject, signal && signal.aborted ? cancellationError(signal, error) : error));
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
     req.end();
   });
 }
 
-async function resolveRemoteImage(inputUrl) {
-  const data = await requestRemote(inputUrl, MAX_REDIRECTS);
+async function resolveRemoteImage(inputUrl, options = {}) {
+  const data = await requestRemote(inputUrl, MAX_REDIRECTS, options);
   return { data, source: inputUrl };
 }
 
 function resolveDataUrl(input) {
   const [header, payload] = input.split(',', 2);
-  if (payload === undefined) raiseImageError('错误: Data URL 格式不完整，缺少逗号分隔符');
+  if (payload === undefined) raiseImageError('Error: Incomplete Data URL; missing comma delimiter');
   const meta = header.slice(5);
-  if (!meta.toLowerCase().startsWith('image/')) raiseImageError('错误: Data URL 仅支持 image/* 媒体类型');
+  if (!meta.toLowerCase().startsWith('image/')) raiseImageError('Error: Data URL supports only image/* media types');
   let data;
   if (meta.toLowerCase().includes(';base64')) {
     const compact = payload.replace(/\s+/g, '');
     const estimatedSize = Math.floor(compact.length * 3 / 4);
-    if (estimatedSize > MAX_DOWNLOAD_BYTES) raiseImageError(`错误: Data URL 解码后超过 ${MAX_DOWNLOAD_MB}MB 限制`);
-    try { data = Buffer.from(compact, 'base64'); } catch { raiseImageError('错误: Data URL 中的图片数据不是有效的 Base64'); }
+    if (estimatedSize > MAX_DOWNLOAD_BYTES) raiseImageError(`Error: Decoded Data URL exceeds the ${MAX_DOWNLOAD_MB}MB limit`);
+    try { data = Buffer.from(compact, 'base64'); } catch { raiseImageError('Error: Image data in the Data URL is not valid Base64'); }
   } else {
     data = Buffer.from(decodeURIComponent(payload), 'utf8');
   }
   return { data, source: 'data-url' };
 }
 
-function resolveBareBase64(input) {
+function looksLikeBareBase64(input) {
   const compact = input.replace(/\s+/g, '');
-  if (compact.length < 16) return null;
-  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 === 1) return null;
-  const estimatedSize = Math.ceil(compact.length / 4) * 3;
-  if (estimatedSize > MAX_DOWNLOAD_BYTES) raiseImageError(`错误: Base64 图片解码后超过 ${MAX_DOWNLOAD_MB}MB 限制`);
-  let data;
-  try { data = Buffer.from(compact, 'base64'); } catch { return null; }
-  return { data, source: 'base64' };
+  return compact.length >= 16
+    && /^[A-Za-z0-9+/]*={0,2}$/.test(compact)
+    && compact.length % 4 !== 1;
 }
 
 function looksLikeLocalPath(value) {
@@ -297,27 +314,33 @@ function looksLikeLocalPath(value) {
 }
 
 async function resolveImageInput(input, options = {}) {
+  throwIfCancelled(options.signal);
   const value = String(input || '').trim();
-  if (!value) raiseImageError('错误: 图片输入不能为空');
+  if (!value) raiseImageError('Error: Image input cannot be empty');
   if (value === 'clipboard') {
     const { filePath, isTemp } = clipboardImagePath(options.clipboard);
     try { return resolveLocalImage(filePath, 'clipboard'); }
     finally { if (isTemp && fs.existsSync(filePath)) fs.rmSync(filePath, { force: true }); }
   }
   if (/^<svg\b/i.test(value) || (/^<\?xml\b/i.test(value) && /<svg\b/i.test(value))) {
-    return { data: Buffer.from(value, 'utf8'), source: 'svg-text' };
+    raiseImageError('Error: Raw SVG text is not accepted as user input; provide the SVG through a local path, file URL, or public HTTP(S) URL');
   }
-  if (value.toLowerCase().startsWith('data:')) return resolveDataUrl(value);
-  if (value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://')) return resolveRemoteImage(value);
+  if (value.toLowerCase().startsWith('data:')) {
+    raiseImageError('Error: Data URLs are not accepted as user input; provide a local path, file URL, public HTTP(S) URL, or clipboard');
+  }
+  if (value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://')) {
+    return (options.resolveRemoteImageImpl || resolveRemoteImage)(value, options);
+  }
   if (value.toLowerCase().startsWith('file://')) return resolveLocalImage(fileURLToPath(value), value);
-  if (value.startsWith('\\\\')) raiseImageError('错误: 不支持 UNC 网络共享路径，请先复制到本地磁盘后再提供');
+  if (value.startsWith('\\\\')) raiseImageError('Error: UNC network-share paths are unsupported; copy the image to a local disk first');
   if (fs.existsSync(value)) return resolveLocalImage(value, value);
-  const resolved = resolveBareBase64(value);
-  if (resolved) return resolved;
-  if (looksLikeLocalPath(value)) {
-    raiseImageError(`错误: 文件不存在或当前会话无法访问: ${value}。如果这是聊天附件，请重新上传为带真实路径的附件，或提供图片的绝对路径`);
+  if (looksLikeBareBase64(value)) {
+    raiseImageError('Error: Bare Base64 is not accepted as user input; provide a local path, file URL, public HTTP(S) URL, or clipboard');
   }
-  raiseImageError(`错误: 无法识别图片输入，请提供本地路径、公开 http(s) URL、data URL、裸 Base64 或 clipboard: ${input}`);
+  if (looksLikeLocalPath(value)) {
+    raiseImageError(`Error: File does not exist or is inaccessible to the current session: ${value}. If this is a chat attachment, upload it again with a real path or provide the image's absolute path`);
+  }
+  raiseImageError(`Error: Unrecognized image input; provide a local path, file URL, public HTTP(S) URL, or clipboard: ${input}`);
 }
 
 async function standardizeImageInput(input, options = {}) {
@@ -325,8 +348,18 @@ async function standardizeImageInput(input, options = {}) {
     return await canonicalizeImage(await resolveImageInput(input, options));
   } catch (error) {
     if (error instanceof ImageStandardizationError) throw error;
-    if (error instanceof ImagePreparationError) raiseImageError(`错误: ${error.message}`);
-    raiseImageError(`错误: 图片输入处理失败: ${error.message || error}`);
+    if (error instanceof ImagePreparationError) raiseImageError(`Error: ${error.message}`);
+    raiseImageError(`Error: Image input processing failed: ${error.message || error}`);
+  }
+}
+
+async function standardizeInternalDataUrl(input) {
+  try {
+    return await canonicalizeImage(resolveDataUrl(String(input || '').trim()));
+  } catch (error) {
+    if (error instanceof ImageStandardizationError) throw error;
+    if (error instanceof ImagePreparationError) raiseImageError(`Error: ${error.message}`);
+    raiseImageError(`Error: Session attachment processing failed: ${error.message || error}`);
   }
 }
 
@@ -338,5 +371,7 @@ module.exports = {
   isPublicIp,
   MAX_DOWNLOAD_MB,
   normalizeRemoteUrl,
+  resolveImageInput,
+  standardizeInternalDataUrl,
   standardizeImageInput,
 };

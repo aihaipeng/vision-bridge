@@ -25,7 +25,7 @@ class ProviderError extends Error {
 }
 
 function singleLine(value) {
-  return String(value || '未知错误').replace(/\s+/g, ' ').trim();
+  return String(value || 'Unknown error').replace(/\s+/g, ' ').trim();
 }
 
 function formatCliError(error) {
