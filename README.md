@@ -97,7 +97,7 @@ npm run doctor
 | 会话附件 | Claude Code/OpenCode 图片附件 | 无真实路径时由恢复器定位 |
 | 系统剪贴板 | `clipboard` | 用户明确指定，或附件恢复失败后单次回退 |
 
-支持 JPG、JPEG、PNG、WebP、TIFF、AVIF、SVG、GIF 第一帧和 BMP。本地文件或远程下载最大 32 MB，解码后最大 100,000,000 像素。Provider 最终只接收标准化后的 JPEG 或 PNG。
+支持 JPG、JPEG、PNG、WebP、TIFF、AVIF、SVG、GIF 第一帧和 BMP。WebP 由随 Skill 安装的 sharp/libvips 原生解码，无需额外转换工具。本地文件或远程下载最大 32 MB，解码后最大 100,000,000 像素。Provider 最终只接收标准化后的 JPEG 或 PNG。
 
 ### ⚙️ 运行规则
 
@@ -216,7 +216,7 @@ Never send Keys through chat, command arguments, or standard input. The `VISION_
 | Session attachment | Claude Code/OpenCode image attachment | Recovered when no real path is available |
 | System clipboard | `clipboard` | Explicit input or one-time fallback after attachment recovery |
 
-Supported formats are JPG, JPEG, PNG, WebP, TIFF, AVIF, SVG, the first GIF frame, and BMP. Local files and remote downloads are limited to 32 MB and 100,000,000 decoded pixels. Providers receive only standardized JPEG or PNG.
+Supported formats are JPG, JPEG, PNG, WebP, TIFF, AVIF, SVG, the first GIF frame, and BMP. WebP is decoded natively by the bundled sharp/libvips runtime, with no external conversion tool required. Local files and remote downloads are limited to 32 MB and 100,000,000 decoded pixels. Providers receive only standardized JPEG or PNG.
 
 ### ⚙️ Runtime Rules
 
