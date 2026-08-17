@@ -8,7 +8,7 @@
 
 <a id="chinese"></a>
 
-## 🇨🇳 中文说明
+## 中文说明
 
 ### ✨ 项目简介
 
@@ -50,6 +50,8 @@ npm run doctor
 ```
 
 #### 🔑 配置 API Key
+
+中国大陆用户推荐优先选择智谱或 NVIDIA，两者通常可直接访问；申请并配置其中任一 Provider 的 API Key 即可使用。
 
 | Provider | 环境变量 | 注册地址 |
 |---|---|---|
@@ -97,80 +99,20 @@ npm run doctor
 
 支持 JPG、JPEG、PNG、WebP、TIFF、AVIF、SVG、GIF 第一帧和 BMP。本地文件或远程下载最大 32 MB，解码后最大 100,000,000 像素。Provider 最终只接收标准化后的 JPEG 或 PNG。
 
-用户直接提供的 Data URL、裸 Base64 和原始 SVG 文本会被拒绝。会话适配器可在内部解析客户端已保存的 Data URL；这不是公开输入能力。
-
-### 🧠 使用方式
-
-#### 🖼️ 单图识别
-
-```bash
-node scripts/describe_image.js "C:/images/shot.png" "Extract the visible text"
-```
-
-问题可省略，默认提示为 `Describe this image in detail.`。
-
-#### 🗂️ 多图批次
-
-```json
-{
-  "prompt": "Compare these images",
-  "items": [
-    "C:/images/a.jpg",
-    { "input": "https://example.com/b.webp", "prompt": "Extract the text" },
-    { "source": { "kind": "session_attachment", "client": "opencode", "cwd": "C:/workspace" } }
-  ]
-}
-```
-
-```bash
-node scripts/describe_images.js path/to/manifest.json
-```
-
-单批默认最多 3 张；取得/标准化默认并发为 1；Provider 任务默认全局并发为 3。单 Provider 在进程内和整台机器上默认并发均为 1。可通过以下变量调整：
-
-- `VISION_BRIDGE_MAX_BATCH_ITEMS`
-- `VISION_BRIDGE_ACQUIRE_CONCURRENCY`
-- `VISION_BRIDGE_CONCURRENCY`（1-32）
-- `VISION_BRIDGE_PROVIDER_CONCURRENCY`
-- `VISION_BRIDGE_BATCH_TIMEOUT_MS`（可选，默认无整批超时）
-
-脚本按标准化图片内容和提示词去重，保留输入顺序。单项失败不阻断其他项，但会让批次退出码变为 1。
-
-只重试失败项：
-
-```bash
-node scripts/create_retry_manifest.js original-manifest.json batch-results.json > retry-manifest.json
-node scripts/describe_images.js retry-manifest.json
-```
-
-#### 📎 会话附件恢复
-
-当 Agent 只看到 `[Image #n]`、`Unsupported Image` 或无路径错误时：
-
-```bash
-node scripts/recover_session_images.js --client auto --cwd "C:/current/workspace"
-```
-
-使用返回 JSON 中的 `images[].path` 继续识别。若返回 `SESSION_AMBIGUOUS`，使用 `--session <id>` 指定当前会话；不要猜测附件路径。
-
 ### ⚙️ 运行规则
 
 - 固定 Provider 顺序：智谱 → NVIDIA → Gemini → Mistral → Cloudflare。
 - 模型失败时先尝试同 Provider 的下一模型；Provider 级失败时切换厂商。
-- 默认隐藏 Provider 加载日志。
-- 排查配置时设置 `VISION_BRIDGE_VERBOSE=1`，仅显示 `[INFO] provider loaded: <provider>`，不打印模型列表。
-- 单图 stdout 不追加 Provider 或模型名称；批次 JSON 不包含 `provider` 或 `model` 字段。
-- 图片只在构造出站请求时编码为 Base64 或 Data URL，不写入工作流状态、日志或结果 JSON。
 
 ### 🤖 支持的模型
 
-| Provider | 默认模型 | 网络提示 |
-|---|---|---|
-| 智谱 | `glm-4.1v-thinking-flash`, `glm-4.6v-flash` | 国内通常可直连 |
-| NVIDIA | `meta/llama-3.2-11b-vision-instruct`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | 国内通常可直连 |
-| Gemini | `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | 部分网络需要代理 |
-| Mistral | `mistral-medium-3.5`, `mistral-medium-latest` | 部分网络需要代理 |
-| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | 部分网络需要代理 |
+| Provider | 默认模型 |
+|---|---|
+| 智谱 | `glm-4.1v-thinking-flash`, `glm-4.6v-flash` |
+| NVIDIA | `meta/llama-3.2-11b-vision-instruct`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` |
+| Gemini | `gemini-3.1-flash-lite`, `gemini-3-flash-preview` |
+| Mistral | `mistral-medium-3.5`, `mistral-medium-latest` |
+| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` |
 
 模型可用性、免费额度和目录会随 Provider 调整，完整限制见 [`references/provider_limits.md`](references/provider_limits.md)。
 
@@ -187,7 +129,7 @@ node scripts/recover_session_images.js --client auto --cwd "C:/current/workspace
 
 <a id="english"></a>
 
-## 🇺🇸 English Guide
+## English Guide
 
 ### ✨ Overview
 
@@ -276,80 +218,20 @@ Never send Keys through chat, command arguments, or standard input. The `VISION_
 
 Supported formats are JPG, JPEG, PNG, WebP, TIFF, AVIF, SVG, the first GIF frame, and BMP. Local files and remote downloads are limited to 32 MB and 100,000,000 decoded pixels. Providers receive only standardized JPEG or PNG.
 
-User-supplied Data URLs, bare Base64, and raw SVG text are rejected. Session adapters may internally decode Data URLs already stored by a supported client; this is not a public input capability.
-
-### 🧠 Usage
-
-#### 🖼️ Single Image
-
-```bash
-node scripts/describe_image.js "C:/images/shot.png" "Extract the visible text"
-```
-
-The question is optional. The default prompt is `Describe this image in detail.`
-
-#### 🗂️ Image Batch
-
-```json
-{
-  "prompt": "Compare these images",
-  "items": [
-    "C:/images/a.jpg",
-    { "input": "https://example.com/b.webp", "prompt": "Extract the text" },
-    { "source": { "kind": "session_attachment", "client": "opencode", "cwd": "C:/workspace" } }
-  ]
-}
-```
-
-```bash
-node scripts/describe_images.js path/to/manifest.json
-```
-
-The default batch limit is 3 images. Acquisition and standardization concurrency defaults to 1. Global Provider-task concurrency defaults to 3. Per-Provider concurrency defaults to 1 both in-process and machine-wide. Configure these limits with:
-
-- `VISION_BRIDGE_MAX_BATCH_ITEMS`
-- `VISION_BRIDGE_ACQUIRE_CONCURRENCY`
-- `VISION_BRIDGE_CONCURRENCY` (1-32)
-- `VISION_BRIDGE_PROVIDER_CONCURRENCY`
-- `VISION_BRIDGE_BATCH_TIMEOUT_MS` (optional; no whole-batch deadline by default)
-
-The runner deduplicates standardized image content and prompts while preserving input order. One failed item does not block the rest, but it makes the batch exit with code 1.
-
-Retry failed items only:
-
-```bash
-node scripts/create_retry_manifest.js original-manifest.json batch-results.json > retry-manifest.json
-node scripts/describe_images.js retry-manifest.json
-```
-
-#### 📎 Session Attachment Recovery
-
-When the Agent sees only `[Image #n]`, `Unsupported Image`, or a pathless error:
-
-```bash
-node scripts/recover_session_images.js --client auto --cwd "C:/current/workspace"
-```
-
-Continue with each `images[].path` from the returned JSON. On `SESSION_AMBIGUOUS`, select the current session with `--session <id>`; never guess an attachment path.
-
 ### ⚙️ Runtime Rules
 
 - Fixed Provider order: Zhipu -> NVIDIA -> Gemini -> Mistral -> Cloudflare.
 - A model failure advances to the next model from the same Provider; a Provider-level failure advances to the next Provider.
-- Provider-load logs are hidden by default.
-- For configuration diagnostics, set `VISION_BRIDGE_VERBOSE=1`. It prints only `[INFO] provider loaded: <provider>` and omits model lists.
-- Single-image stdout does not append Provider or model names. Batch JSON excludes `provider` and `model` fields.
-- Images become Base64 or Data URLs only while serializing outbound requests; workflow state, logs, and result JSON never store those encodings.
 
 ### 🤖 Supported Models
 
-| Provider | Default models | Network notes |
-|---|---|---|
-| Zhipu | `glm-4.1v-thinking-flash`, `glm-4.6v-flash` | Usually reachable directly from mainland China |
-| NVIDIA | `meta/llama-3.2-11b-vision-instruct`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | Usually reachable directly from mainland China |
-| Gemini | `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | Some networks require a proxy |
-| Mistral | `mistral-medium-3.5`, `mistral-medium-latest` | Some networks require a proxy |
-| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` | Some networks require a proxy |
+| Provider | Default models |
+|---|---|
+| Zhipu | `glm-4.1v-thinking-flash`, `glm-4.6v-flash` |
+| NVIDIA | `meta/llama-3.2-11b-vision-instruct`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` |
+| Gemini | `gemini-3.1-flash-lite`, `gemini-3-flash-preview` |
+| Mistral | `mistral-medium-3.5`, `mistral-medium-latest` |
+| Cloudflare | `@cf/meta/llama-3.2-11b-vision-instruct` |
 
 Provider catalogs, free tiers, and model availability can change. See [`references/provider_limits.md`](references/provider_limits.md) for complete limits.
 
