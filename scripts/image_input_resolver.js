@@ -9,6 +9,7 @@ const { spawnSync } = require('child_process');
 const { URL, fileURLToPath } = require('url');
 const { canonicalizeImage, ImagePreparationError } = require('./image_preparer');
 const { cancellationError, throwIfCancelled } = require('./workflow/cancellation');
+const { proxyAgentFor } = require('./providers/http');
 
 const MAX_DOWNLOAD_MB = 32;
 const REMOTE_TIMEOUT_MS = 30000;
@@ -187,11 +188,16 @@ function normalizeRemoteUrl(inputUrl) {
   return url;
 }
 
-async function ensurePublicHttpUrl(inputUrl, options = {}) {
-  throwIfCancelled(options.signal);
+function validateRemoteUrl(inputUrl) {
   const url = normalizeRemoteUrl(inputUrl);
   if (!['http:', 'https:'].includes(url.protocol)) raiseImageError(`Error: Unsupported remote URL protocol: ${url.protocol}`);
   if (url.username || url.password) raiseImageError('Error: Remote URL cannot contain a username or password');
+  return url;
+}
+
+async function ensurePublicHttpUrl(inputUrl, options = {}) {
+  throwIfCancelled(options.signal);
+  const url = validateRemoteUrl(inputUrl);
   const records = await dns.lookup(url.hostname, { all: true });
   throwIfCancelled(options.signal);
   if (!records.length) raiseImageError(`Error: Remote host ${url.hostname} did not resolve to a valid address`);
@@ -231,7 +237,10 @@ function readResponse(res, signal) {
 async function requestRemote(currentUrl, redirectsLeft, options = {}) {
   const { signal } = options;
   throwIfCancelled(signal);
-  const { url, addresses } = await ensurePublicHttpUrl(currentUrl, options);
+  const url = validateRemoteUrl(currentUrl);
+  const proxyAgent = proxyAgentFor(url);
+  let addresses = null;
+  if (!proxyAgent) ({ addresses } = await ensurePublicHttpUrl(currentUrl, options));
   const lib = url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {
     let req;
@@ -247,13 +256,14 @@ async function requestRemote(currentUrl, redirectsLeft, options = {}) {
       path: `${url.pathname}${url.search}`,
       method: 'GET',
       headers: { 'User-Agent': 'vision-bridge/1.0' },
-      lookup: createPinnedLookup(addresses),
-      servername: url.hostname,
+      ...(proxyAgent ? { agent: proxyAgent } : { lookup: createPinnedLookup(addresses), servername: url.hostname }),
       timeout: REMOTE_TIMEOUT_MS,
     }, async (res) => {
       try {
-        const remoteAddress = res.socket && res.socket.remoteAddress ? res.socket.remoteAddress : addresses[0];
-        if (!isPublicIp(remoteAddress)) throw new ImageStandardizationError(`Error: Remote host ${url.hostname} connected to non-public address ${remoteAddress}`);
+        if (!proxyAgent) {
+          const remoteAddress = res.socket && res.socket.remoteAddress ? res.socket.remoteAddress : addresses[0];
+          if (!isPublicIp(remoteAddress)) throw new ImageStandardizationError(`Error: Remote host ${url.hostname} connected to non-public address ${remoteAddress}`);
+        }
         if ([301,302,303,307,308].includes(res.statusCode)) {
           if (redirectsLeft <= 0) throw new ImageStandardizationError(`Error: Remote URL exceeded the ${MAX_REDIRECTS}-redirect limit`);
           const location = res.headers.location;
@@ -266,13 +276,18 @@ async function requestRemote(currentUrl, redirectsLeft, options = {}) {
           const detail = (await readResponse(res, signal)).toString('utf8').slice(0, 300);
           throw new ImageStandardizationError(`Error: Failed to download remote image, HTTP ${res.statusCode}: ${detail}`);
         }
-        finish(resolve, readResponse(res, signal));
+        const body = readResponse(res, signal);
+        finish(resolve, proxyAgent ? body.finally(() => proxyAgent.destroy()) : body);
       } catch (error) {
+        if (proxyAgent) proxyAgent.destroy();
         finish(reject, error);
       }
     });
     req.on('timeout', () => req.destroy(new ImageStandardizationError('Error: Remote image download timed out')));
-    req.on('error', (error) => finish(reject, signal && signal.aborted ? cancellationError(signal, error) : error));
+    req.on('error', (error) => {
+      if (proxyAgent) proxyAgent.destroy();
+      finish(reject, signal && signal.aborted ? cancellationError(signal, error) : error);
+    });
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
     req.end();
   });

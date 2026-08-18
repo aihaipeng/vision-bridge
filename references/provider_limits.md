@@ -103,7 +103,7 @@ Cloudflare sends an idempotent `{"prompt":"agree"}` request to the run endpoint 
 | `VISION_BRIDGE_BATCH_TIMEOUT_MS` | Optional positive whole-batch deadline in milliseconds; unset by default |
 | `VISION_BRIDGE_VERBOSE` | Set to `1` to emit `[INFO] provider loaded: <provider>`; hidden by default and never prints model lists |
 
-Provider requests honor `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`. Machine-wide per-Provider concurrency defaults to 1 and uses atomic leases in the system temp directory. Lease data contains only PID and timestamps, is renewed by heartbeat, and supports stale recovery.
+Provider requests and remote image downloads honor `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`. Machine-wide per-Provider concurrency defaults to 1 and uses atomic leases in the system temp directory. Lease data contains only PID and timestamps, is renewed by heartbeat, and supports stale recovery.
 
 ## Official references
 

@@ -177,4 +177,4 @@ Common errors:
 
 ## Proxy
 
-Provider requests support `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`. When a proxy connection fails, verify the proxy URL, port, and `NO_PROXY` host-matching rules. Never print a proxy URL containing credentials in logs.
+Provider requests and remote image downloads support `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`. When a proxy is active, public-address validation and DNS pinning for downloads are delegated to the configured proxy. When a proxy connection fails, verify the proxy URL, port, and `NO_PROXY` host-matching rules. Never print a proxy URL containing credentials in logs.

@@ -88,7 +88,7 @@ npm run doctor
 |---|---|---|
 | 本地路径 | `C:\images\shot.png` | 支持绝对或相对路径 |
 | `file://` URL | `file:///C:/images/shot.png` | 转换为本地路径后读取 |
-| 公开 HTTP(S) URL | `https://example.com/image.jpg` | 拒绝私网、回环和带凭据 URL |
+| 公开 HTTP(S) URL | `https://example.com/image.jpg` | 拒绝私网、回环和带凭据 URL；下载与 Provider 请求一样遵循 `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` |
 | 会话附件 | Claude Code/OpenCode 图片附件 | 无真实路径时由恢复器定位 |
 | 系统剪贴板 | `clipboard` | 用户明确指定，或附件恢复失败后单次回退 |
 
@@ -202,7 +202,7 @@ npm run doctor
 |---|---|---|
 | Local path | `C:\images\shot.png` | Absolute and relative paths are supported |
 | `file://` URL | `file:///C:/images/shot.png` | Converted to a local path before reading |
-| Public HTTP(S) URL | `https://example.com/image.jpg` | Private, loopback, and credential-bearing URLs are rejected |
+| Public HTTP(S) URL | `https://example.com/image.jpg` | Private, loopback, and credential-bearing URLs are rejected; downloads honor `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` like Provider requests |
 | Session attachment | Claude Code/OpenCode image attachment | Recovered when no real path is available |
 | System clipboard | `clipboard` | Explicit input or one-time fallback after attachment recovery |
 
